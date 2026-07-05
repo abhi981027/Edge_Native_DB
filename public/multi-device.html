@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edge Sync — Multi-Device</title>
+<style>
+:root {
+  --bg:  #ffffff;
+  --sf:  #f8f8f8;
+  --sf2: #f0f0f0;
+  --bd:  #e0e0e0;
+  --bd2: #c8c8c8;
+  --tx:  #000000;
+  --tx2: #555555;
+  --tx3: #999999;
+  --mono: ui-monospace,'JetBrains Mono','Fira Code',Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--tx);
+  font-family:var(--mono);font-size:12px;line-height:1.5;overflow:hidden}
+
+#hdr{display:flex;align-items:center;gap:8px;padding:0 14px;height:40px;
+  background:var(--bg);border-bottom:1px solid var(--bd)}
+#hdr h1{font-size:12px;font-weight:700;letter-spacing:.5px}
+.dev-pill{font-size:9px;padding:1px 6px;border-radius:2px;font-weight:600;
+  background:var(--sf2);border:1px solid var(--bd2);color:var(--tx2);letter-spacing:.3px}
+#hdr-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+
+#scn-bar{display:flex;align-items:center;gap:8px;padding:5px 14px;
+  background:var(--sf);border-bottom:1px solid var(--bd)}
+#scn-bar label{font-size:10px;color:var(--tx3);white-space:nowrap}
+#scn-sel{background:var(--bg);border:1px solid var(--bd2);color:var(--tx);
+  font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:2px;cursor:pointer}
+#scn-title{font-size:11px;font-weight:600}
+#scn-hint{font-size:10px;color:var(--tx2)}
+.scn-dots{display:flex;gap:3px}
+.scn-dot{width:5px;height:5px;border-radius:50%;background:var(--bd2)}
+.scn-dot.done{background:var(--tx2)}.scn-dot.cur{background:var(--tx)}
+
+#layout{display:grid;grid-template-columns:1fr 290px 250px;
+  height:calc(100vh - 82px);overflow:hidden}
+.panel{display:flex;flex-direction:column;border-right:1px solid var(--bd);overflow:hidden}
+.panel:last-child{border-right:none}
+.panel-hdr{padding:6px 11px;background:var(--sf);border-bottom:1px solid var(--bd);
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--tx2);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.panel-body{flex:1;overflow-y:auto;padding:9px 11px}
+
+#devices-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;height:100%}
+.dev-card{display:flex;flex-direction:column;background:var(--sf);
+  border:1px solid var(--bd);border-radius:2px;overflow:hidden;min-height:0}
+.dev-card.offline{border-top:2px solid var(--bd2)}
+.dev-card.syncing{border-top:2px solid var(--tx)}
+.dev-card.conflict{border-top:2px solid var(--tx2)}
+.dev-hdr{padding:6px 9px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:5px;flex-shrink:0}
+.dev-name{font-weight:700;font-size:11px;flex:1}
+.dev-state{font-size:9px;padding:1px 5px;border-radius:2px;border:1px solid var(--bd2);color:var(--tx3)}
+.dev-state.syncing{border-color:var(--tx);color:var(--tx)}
+.dev-state.retrying{border-color:var(--tx2);color:var(--tx2)}
+.dev-state.offline{color:var(--tx2);border-color:var(--tx2)}
+.dev-body{flex:1;overflow-y:auto;padding:7px 9px;display:flex;flex-direction:column;gap:5px}
+.dev-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;flex-shrink:0}
+.ds{background:var(--bg);border:1px solid var(--bd);border-radius:2px;padding:3px 5px;text-align:center}
+.ds-n{font-size:14px;font-weight:700}
+.ds-l{font-size:8px;color:var(--tx3);text-transform:uppercase}
+.dev-users{flex:1;min-height:0;overflow:hidden}
+.user-row{display:flex;align-items:center;gap:4px;padding:2px 0;border-bottom:1px solid var(--bd);font-size:10px}
+.user-row:last-child{border:none}
+.user-n{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-dev{font-size:9px;color:var(--tx3);white-space:nowrap}
+.dev-controls{display:flex;flex-direction:column;gap:3px;flex-shrink:0}
+.dev-btns{display:flex;gap:3px}
+
+button{background:var(--bg);border:1px solid var(--bd2);color:var(--tx2);
+  font-family:var(--mono);font-size:10px;padding:3px 7px;cursor:pointer;
+  border-radius:2px;transition:all .1s}
+button:hover{border-color:var(--tx2);color:var(--tx);background:var(--sf)}
+.btn-b{border-color:var(--tx);color:var(--tx)}
+.btn-b:hover{background:var(--sf2)}
+.btn-g{border-color:var(--tx);color:var(--tx)}
+.btn-g:hover{background:var(--sf2)}
+.btn-r{border-color:var(--tx2);color:var(--tx2)}
+.btn-r:hover{background:var(--sf)}
+button.active{background:var(--tx);border-color:var(--tx);color:var(--bg)}
+input,select{background:var(--bg);border:1px solid var(--bd2);color:var(--tx);
+  font-family:var(--mono);font-size:10px;padding:3px 6px;border-radius:2px}
+input:focus,select:focus{outline:none;border-color:var(--tx)}
+
+.write-form{display:none;flex-direction:column;gap:3px;padding:3px 0}
+.write-form.open{display:flex}
+
+#topology-wrap{padding:10px;flex-shrink:0;border-bottom:1px solid var(--bd)}
+#topology-svg{width:100%;height:185px;display:block}
+.topo-line{stroke:var(--bd2);stroke-width:1;fill:none;stroke-dasharray:3 4}
+.topo-label{font-size:9px;font-weight:700;fill:var(--tx2);font-family:ui-monospace,monospace}
+.topo-sub{font-size:8px;fill:var(--tx3);font-family:ui-monospace,monospace}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+#scn-steps{flex:1;overflow-y:auto;padding:9px 11px}
+.step-item{display:flex;align-items:flex-start;gap:6px;padding:3px 7px;border-radius:2px;font-size:10px}
+.step-item.active{background:var(--sf2)}
+.step-item.done{opacity:.4}
+.step-idx{width:14px;height:14px;border-radius:50%;flex-shrink:0;display:flex;
+  align-items:center;justify-content:center;font-size:8px;font-weight:700;
+  background:var(--sf2);border:1px solid var(--bd2);color:var(--tx3)}
+.step-idx.done{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.step-idx.active{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.step-lbl{font-weight:600}.step-hint{color:var(--tx3);font-size:9px}
+
+.ev-item{display:flex;align-items:flex-start;gap:6px;padding:3px 0;
+  border-bottom:1px solid var(--bd);font-size:10px}
+.ev-item:last-child{border:none}
+.ev-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:3px;background:var(--tx2)}
+.ev-ok,.ev-write,.ev-merge{background:var(--tx)}
+.ev-fail,.ev-conflict{border:1.5px solid var(--tx);background:transparent}
+.ev-net{background:var(--tx3)}
+.ev-tag{font-size:9px;font-weight:600;color:var(--tx2);white-space:nowrap;flex-shrink:0;width:44px}
+.ev-detail{flex:1;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev-time{font-size:9px;color:var(--tx3);white-space:nowrap}
+
+.cf-card{border:1px solid var(--bd);border-radius:2px;margin-bottom:6px;overflow:hidden}
+.cf-card.unresolved{border-left:3px solid var(--tx)}
+.cf-card.merged{border-left:3px solid var(--tx2)}
+.cf-hdr{display:flex;align-items:center;gap:5px;padding:5px 9px;
+  background:var(--sf);border-bottom:1px solid var(--bd);font-size:10px}
+.cf-rec{flex:1;font-weight:600}
+.cf-grid{display:grid;grid-template-columns:1fr 1fr;font-size:10px}
+.cf-side{padding:5px 9px}
+.cf-side:first-child{border-right:1px solid var(--bd)}
+.cf-lbl{font-size:8px;text-transform:uppercase;color:var(--tx3);margin-bottom:2px;font-weight:600}
+.cf-val{font-weight:600}
+.cf-foot{padding:4px 9px;border-top:1px solid var(--bd);display:flex;gap:3px;align-items:center}
+
+.badge{display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;font-weight:600;
+  background:var(--sf2);color:var(--tx2);border:1px solid var(--bd2)}
+.bg{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.br{background:var(--bg);color:var(--tx);border-color:var(--tx)}
+.bb{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.by{background:var(--sf2);color:var(--tx2)}
+
+#toast{position:fixed;bottom:12px;right:12px;background:var(--tx);color:var(--bg);
+  padding:6px 12px;border-radius:2px;font-size:11px;
+  opacity:0;transition:opacity .2s;pointer-events:none;z-index:99}
+#toast.show{opacity:1}
+.empty{color:var(--tx3);text-align:center;padding:12px;font-size:11px}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <h1>MULTI-DEVICE SYNC</h1>
+  <span class="dev-pill">ALPHA</span>
+  <span class="dev-pill">BETA</span>
+  <span class="dev-pill">GAMMA</span>
+  <div id="hdr-right">
+    <button class="btn-b" onclick="syncAll()">Sync All</button>
+    <button onclick="doReset()">Reset</button>
+    <a href="/" style="font-size:10px;color:var(--tx3);text-decoration:none">Demo</a>
+    <a href="/devtools" style="font-size:10px;color:var(--tx3);text-decoration:none">DevTools</a>
+  </div>
+</div>
+
+<div id="scn-bar">
+  <label>Scenario</label>
+  <select id="scn-sel" onchange="loadScenario()">
+    <option value="three-way">1 — Three-Way Conflict</option>
+    <option value="partition">2 — Partition &amp; Rejoin</option>
+    <option value="cascade">3 — Cascading CRDT Merge</option>
+  </select>
+  <div style="flex:1;min-width:0">
+    <div id="scn-title">—</div>
+    <div id="scn-hint" style="font-size:10px;color:var(--tx2)">Select a scenario</div>
+  </div>
+  <div class="scn-dots" id="scn-dots"></div>
+  <span id="scn-prog" style="font-size:10px;color:var(--tx3)">0 / 0</span>
+  <button id="btn-run" class="btn-b" onclick="runStep()">Run Step</button>
+  <button onclick="prevStep()">Back</button>
+</div>
+
+<div id="layout">
+
+  <div class="panel">
+    <div class="panel-hdr">Devices</div>
+    <div class="panel-body" style="padding:7px">
+      <div id="devices-grid">
+
+        <div class="dev-card" id="card-device-alpha">
+          <div class="dev-hdr">
+            <span class="dev-name">ALPHA</span>
+            <span class="dev-state" id="state-device-alpha">idle</span>
+          </div>
+          <div class="dev-body">
+            <div class="dev-stats">
+              <div class="ds"><div class="ds-n" id="pending-device-alpha">0</div><div class="ds-l">Pending</div></div>
+              <div class="ds"><div class="ds-n" id="conflicts-device-alpha">0</div><div class="ds-l">Conflicts</div></div>
+              <div class="ds"><div class="ds-n" id="users-device-alpha">0</div><div class="ds-l">Users</div></div>
+            </div>
+            <div class="dev-users" id="users-device-alpha-list"></div>
+            <div class="dev-controls">
+              <div class="dev-btns">
+                <button class="btn-b" onclick="showWrite('device-alpha')" style="flex:1">Write</button>
+                <button onclick="devSync('device-alpha')" style="flex:1">Sync</button>
+                <button id="offbtn-device-alpha" class="btn-r" onclick="toggleOffline('device-alpha')" style="flex:1">Offline</button>
+              </div>
+              <div class="write-form" id="wf-device-alpha">
+                <input id="wid-device-alpha" placeholder="user-id" style="width:100%">
+                <input id="wname-device-alpha" placeholder="name" style="width:100%">
+                <div class="dev-btns">
+                  <button class="btn-g" onclick="submitWrite('device-alpha')" style="flex:1">Add</button>
+                  <button onclick="hideWrite('device-alpha')" style="flex:1">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dev-card" id="card-device-beta">
+          <div class="dev-hdr">
+            <span class="dev-name">BETA</span>
+            <span class="dev-state" id="state-device-beta">idle</span>
+          </div>
+          <div class="dev-body">
+            <div class="dev-stats">
+              <div class="ds"><div class="ds-n" id="pending-device-beta">0</div><div class="ds-l">Pending</div></div>
+              <div class="ds"><div class="ds-n" id="conflicts-device-beta">0</div><div class="ds-l">Conflicts</div></div>
+              <div class="ds"><div class="ds-n" id="users-device-beta">0</div><div class="ds-l">Users</div></div>
+            </div>
+            <div class="dev-users" id="users-device-beta-list"></div>
+            <div class="dev-controls">
+              <div class="dev-btns">
+                <button class="btn-b" onclick="showWrite('device-beta')" style="flex:1">Write</button>
+                <button onclick="devSync('device-beta')" style="flex:1">Sync</button>
+                <button id="offbtn-device-beta" class="btn-r" onclick="toggleOffline('device-beta')" style="flex:1">Offline</button>
+              </div>
+              <div class="write-form" id="wf-device-beta">
+                <input id="wid-device-beta" placeholder="user-id" style="width:100%">
+                <input id="wname-device-beta" placeholder="name" style="width:100%">
+                <div class="dev-btns">
+                  <button class="btn-g" onclick="submitWrite('device-beta')" style="flex:1">Add</button>
+                  <button onclick="hideWrite('device-beta')" style="flex:1">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dev-card" id="card-device-gamma">
+          <div class="dev-hdr">
+            <span class="dev-name">GAMMA</span>
+            <span class="dev-state" id="state-device-gamma">idle</span>
+          </div>
+          <div class="dev-body">
+            <div class="dev-stats">
+              <div class="ds"><div class="ds-n" id="pending-device-gamma">0</div><div class="ds-l">Pending</div></div>
+              <div class="ds"><div class="ds-n" id="conflicts-device-gamma">0</div><div class="ds-l">Conflicts</div></div>
+              <div class="ds"><div class="ds-n" id="users-device-gamma">0</div><div class="ds-l">Users</div></div>
+            </div>
+            <div class="dev-users" id="users-device-gamma-list"></div>
+            <div class="dev-controls">
+              <div class="dev-btns">
+                <button class="btn-b" onclick="showWrite('device-gamma')" style="flex:1">Write</button>
+                <button onclick="devSync('device-gamma')" style="flex:1">Sync</button>
+                <button id="offbtn-device-gamma" class="btn-r" onclick="toggleOffline('device-gamma')" style="flex:1">Offline</button>
+              </div>
+              <div class="write-form" id="wf-device-gamma">
+                <input id="wid-device-gamma" placeholder="user-id" style="width:100%">
+                <input id="wname-device-gamma" placeholder="name" style="width:100%">
+                <div class="dev-btns">
+                  <button class="btn-g" onclick="submitWrite('device-gamma')" style="flex:1">Add</button>
+                  <button onclick="hideWrite('device-gamma')" style="flex:1">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">Sync Topology</div>
+    <div id="topology-wrap">
+      <svg id="topology-svg" viewBox="0 0 280 185">
+        <line class="topo-line" x1="60" y1="50" x2="140" y2="97"/>
+        <line class="topo-line" x1="220" y1="50" x2="140" y2="97"/>
+        <line class="topo-line" x1="140" y1="163" x2="140" y2="107"/>
+        <circle cx="140" cy="102" r="20" fill="var(--sf)" stroke="var(--bd2)" stroke-width="1"/>
+        <text x="140" y="99"  text-anchor="middle" class="topo-label">SERVER</text>
+        <text x="140" y="110" text-anchor="middle" class="topo-sub" id="srv-ops">0 ops</text>
+        <circle cx="60" cy="45" r="17" fill="var(--sf)" stroke="var(--bd2)" stroke-width="1" id="node-device-alpha"/>
+        <text x="60" y="42"  text-anchor="middle" class="topo-label">ALPHA</text>
+        <text x="60" y="52"  text-anchor="middle" class="topo-sub" id="topo-state-device-alpha">idle</text>
+        <text x="60" y="28"  text-anchor="middle" class="topo-sub" id="topo-users-device-alpha">0</text>
+        <circle cx="220" cy="45" r="17" fill="var(--sf)" stroke="var(--bd2)" stroke-width="1" id="node-device-beta"/>
+        <text x="220" y="42" text-anchor="middle" class="topo-label">BETA</text>
+        <text x="220" y="52" text-anchor="middle" class="topo-sub" id="topo-state-device-beta">idle</text>
+        <text x="220" y="28" text-anchor="middle" class="topo-sub" id="topo-users-device-beta">0</text>
+        <circle cx="140" cy="168" r="17" fill="var(--sf)" stroke="var(--bd2)" stroke-width="1" id="node-device-gamma"/>
+        <text x="140" y="165" text-anchor="middle" class="topo-label">GAMMA</text>
+        <text x="140" y="175" text-anchor="middle" class="topo-sub" id="topo-state-device-gamma">idle</text>
+        <text x="140" y="183" text-anchor="middle" class="topo-sub" id="topo-users-device-gamma">0</text>
+        <g id="packets"></g>
+      </svg>
+    </div>
+    <div class="panel-hdr" style="border-top:1px solid var(--bd)">Scenario Steps</div>
+    <div id="scn-steps" class="panel-body"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">
+      Events
+      <span id="ev-count" style="font-weight:400;color:var(--tx3)"></span>
+      <button onclick="clearEvents()" style="margin-left:auto;padding:1px 5px;font-size:9px">Clear</button>
+    </div>
+    <div id="ev-list" style="flex:0 0 42%;overflow-y:auto;padding:7px 10px;border-bottom:1px solid var(--bd)">
+      <div class="empty">Waiting for events...</div>
+    </div>
+    <div class="panel-hdr" style="border-top:1px solid var(--bd)">
+      Conflicts
+      <span id="cf-total" style="font-weight:400;color:var(--tx3)"></span>
+      <button onclick="mergeAllDevices()" class="btn-b" style="margin-left:auto;padding:1px 5px;font-size:9px">Auto-merge All</button>
+    </div>
+    <div id="cf-list" style="flex:1;overflow-y:auto;padding:7px 10px">
+      <div class="empty">No conflicts</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+const NODES = {
+  'device-alpha':{x:60, y:45},
+  'device-beta': {x:220,y:45},
+  'device-gamma':{x:140,y:168},
+  'server':      {x:140,y:102},
+};
+
+let snapshots={}, localEvents=[], eventIdSeen=0;
+
+const es = new EventSource('/api/multi/events');
+es.onmessage = e => {
+  const msg = JSON.parse(e.data);
+  if (msg.type==='snapshot') applySnapshots(msg.snapshots);
+  else if (msg.type==='event') ingestEvent(msg.event);
+};
+
+function applySnapshots(list) {
+  for (const snap of list) { snapshots[snap.id]=snap; renderDevice(snap); }
+  renderConflicts();
+}
+
+function renderDevice(snap) {
+  const id = snap.id;
+  const card = document.getElementById(`card-${id}`);
+  if (!card) return;
+  card.className = 'dev-card' + (snap.offline?' offline':snap.status.syncState==='syncing'?' syncing':snap.unresolvedConflicts>0?' conflict':'');
+  const stEl = document.getElementById(`state-${id}`);
+  stEl.textContent = snap.offline ? 'offline' : snap.status.syncState;
+  stEl.className = 'dev-state ' + (snap.offline ? 'offline' : snap.status.syncState);
+  document.getElementById(`pending-${id}`).textContent   = snap.status.pendingOps;
+  document.getElementById(`conflicts-${id}`).textContent = snap.unresolvedConflicts;
+  document.getElementById(`users-${id}`).textContent     = snap.users.length;
+  const offBtn = document.getElementById(`offbtn-${id}`);
+  if (offBtn) { offBtn.textContent=snap.offline?'Online':'Offline'; offBtn.className=snap.offline?'active':'btn-r'; }
+  const listEl = document.getElementById(`users-${id}-list`);
+  if (!snap.users.length) {
+    listEl.innerHTML='<div class="empty" style="font-size:9px;padding:4px">No users</div>';
+  } else {
+    listEl.innerHTML = snap.users.slice(0,5).map(u =>
+      `<div class="user-row"><span class="user-n">${esc(u.name)}</span><span class="user-dev">${esc((u.device_id||'').replace('device-','').slice(0,5))}</span></div>`
+    ).join('')+(snap.users.length>5?`<div style="font-size:9px;color:var(--tx3);padding:2px 0">+${snap.users.length-5} more</div>`:'');
+  }
+  const ts = document.getElementById(`topo-state-${id}`);
+  const tu = document.getElementById(`topo-users-${id}`);
+  if (ts) ts.textContent = snap.offline?'offline':snap.status.syncState;
+  if (tu) tu.textContent = snap.users.length+' users';
+  const nodeEl = document.getElementById(`node-${id}`);
+  if (nodeEl) {
+    if (snap.status.syncState==='syncing') { nodeEl.style.stroke='#000'; nodeEl.style.strokeWidth='2'; }
+    else if (snap.offline) { nodeEl.style.stroke='#c8c8c8'; nodeEl.style.strokeWidth='1'; }
+    else if (snap.unresolvedConflicts>0) { nodeEl.style.stroke='#555'; nodeEl.style.strokeWidth='1.5'; }
+    else { nodeEl.style.stroke='#c8c8c8'; nodeEl.style.strokeWidth='1'; }
+  }
+}
+
+function ingestEvent(e) {
+  if (e.id<=eventIdSeen) return;
+  eventIdSeen=e.id; localEvents.unshift(e);
+  if (localEvents.length>120) localEvents.pop();
+  animateEvent(e); renderEvents();
+}
+function clearEvents(){ localEvents=[]; eventIdSeen=0; renderEvents(); }
+
+function animateEvent(e) {
+  const svg = document.getElementById('packets');
+  const devId = e.deviceId;
+  if (e.kind==='sync_ok') {
+    firePacket(svg, devId,'server','#000',0);
+    if ((e.received??0)>0) firePacket(svg,'server',devId,'#555',260);
+  } else if (e.kind==='sync_fail') {
+    firePacket(svg, devId,'server','#c8c8c8',0);
+  } else if (e.kind==='conflict') {
+    firePacket(svg, devId,'server','#555',0);
+    firePacket(svg,'server',devId,'#555',200);
+  }
+}
+
+function firePacket(svg, fromId, toId, fill, delayMs) {
+  const f=NODES[fromId], t=NODES[toId];
+  if (!f||!t) return;
+  setTimeout(()=>{
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('r','4'); c.setAttribute('fill',fill); svg.appendChild(c);
+    const m=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+    m.setAttribute('dur','0.5s'); m.setAttribute('begin','indefinite'); m.setAttribute('fill','freeze');
+    m.setAttribute('path',`M ${f.x} ${f.y} L ${t.x} ${t.y}`);
+    c.appendChild(m); m.beginElement(); setTimeout(()=>c.remove(),650);
+  },delayMs);
+}
+
+function renderEvents() {
+  const el=document.getElementById('ev-list');
+  const cnt=document.getElementById('ev-count');
+  cnt.textContent=localEvents.length?`(${localEvents.length})`:'';
+  if (!localEvents.length){el.innerHTML='<div class="empty">Waiting for events...</div>';return;}
+  const DOT={sync_ok:'ev-ok',sync_fail:'ev-fail',write:'ev-write',conflict:'ev-conflict',merge:'ev-merge',offline:'ev-net',online:'ev-net'};
+  el.innerHTML=localEvents.slice(0,40).map(e=>{
+    const tag=(e.deviceId==='all'?'ALL':e.deviceId.replace('device-','').toUpperCase()).slice(0,5);
+    return `<div class="ev-item"><div class="ev-dot ${DOT[e.kind]??'ev-net'}"></div><span class="ev-tag">${esc(tag)}</span><span class="ev-detail">${esc(e.detail)}</span><span class="ev-time">${relTime(e.at)}</span></div>`;
+  }).join('');
+}
+
+function renderConflicts() {
+  fetch('/api/multi/conflicts').then(r=>r.json()).then(conflicts=>{
+    const el=document.getElementById('cf-list');
+    const cnt=document.getElementById('cf-total');
+    const unresolved=conflicts.filter(c=>!c.resolved).length;
+    cnt.textContent=conflicts.length?`(${unresolved} unresolved)`:'';
+    if (!conflicts.length){el.innerHTML='<div class="empty">No conflicts</div>';return;}
+    el.innerHTML=conflicts.slice(0,20).map(c=>renderConflict(c)).join('');
+  }).catch(()=>{});
+}
+
+function renderConflict(c) {
+  const lv=c.localVersion,rv=c.remoteVersion,mv=c.mergedVersion;
+  const lName=lv?.data?.name??JSON.stringify(lv?.data??{}).slice(0,30);
+  const rName=rv?.data?.name??JSON.stringify(rv?.data??{}).slice(0,30);
+  const mName=mv?.data?.name??'';
+  const wBadge={local:'bg',remote:'bb',merged:'bb',manual:'by'}[c.winner]??'';
+  const wLabel={local:'local',remote:'remote',merged:'merged',manual:'manual'}[c.winner]??c.winner;
+  const tag=(c.deviceId||'').replace('device-','').toUpperCase().slice(0,5);
+  return `<div class="cf-card ${c.resolved?(c.winner==='merged'?'merged':''):'unresolved'}">
+    <div class="cf-hdr">
+      <span class="badge ${c.resolved?'bg':'br'}">${c.resolved?'resolved':'conflict'}</span>
+      <span class="cf-rec">${esc(c.tableName)}/<strong>${esc(c.recordId)}</strong></span>
+      <span class="badge ${wBadge}">${wLabel}</span>
+      <span style="font-size:9px;color:var(--tx3);margin-left:4px">${esc(tag)}</span>
+    </div>
+    <div class="cf-grid">
+      <div class="cf-side"><div class="cf-lbl">Local</div><div class="cf-val">${esc(String(lName).slice(0,40))}</div></div>
+      <div class="cf-side"><div class="cf-lbl">Remote</div><div class="cf-val">${esc(String(rName).slice(0,40))}</div></div>
+      ${mv?`<div class="cf-side" style="grid-column:1/-1;border-top:1px solid var(--bd);background:var(--sf)"><div class="cf-lbl">Merged</div><div class="cf-val">${esc(String(mName).slice(0,50))}</div></div>`:''}
+    </div>
+    ${!c.resolved?`<div class="cf-foot">
+      <span style="font-size:9px;color:var(--tx3);flex:1">${esc(c.id.slice(0,8))}...</span>
+      <button onclick="cfMerge('${esc(c.deviceId)}','${esc(c.id)}')" class="btn-b" style="font-size:9px">CRDT</button>
+      <button onclick="cfApply('${esc(c.deviceId)}','${esc(c.id)}','local')"  class="btn-g" style="font-size:9px">Local</button>
+      <button onclick="cfApply('${esc(c.deviceId)}','${esc(c.id)}','remote')" style="font-size:9px">Remote</button>
+    </div>`:''}
+  </div>`;
+}
+
+function showWrite(id){document.getElementById(`wf-${id}`).classList.add('open');document.getElementById(`wid-${id}`).focus();}
+function hideWrite(id){document.getElementById(`wf-${id}`).classList.remove('open');}
+async function submitWrite(id){
+  const uid=document.getElementById(`wid-${id}`).value.trim();
+  const name=document.getElementById(`wname-${id}`).value.trim();
+  if(!uid||!name)return toast('ID and name required');
+  await post(`/api/multi/devices/${id}/write-user`,{userId:uid,name});
+  document.getElementById(`wid-${id}`).value='';document.getElementById(`wname-${id}`).value='';
+  hideWrite(id);toast(`Written to ${id.replace('device-','').toUpperCase()}`);
+}
+async function devSync(id){await post(`/api/multi/devices/${id}/sync`,{});toast(`Synced ${id.replace('device-','').toUpperCase()}`);}
+async function syncAll(){await post('/api/multi/sync-all',{});toast('All devices synced');}
+async function toggleOffline(id){
+  const offline=!(snapshots[id]?.offline??false);
+  await post(`/api/multi/devices/${id}/offline`,{offline});
+  toast(`${id.replace('device-','').toUpperCase()}: ${offline?'offline':'online'}`);
+}
+async function doReset(){
+  await post('/api/multi/reset',{users:[{id:'user-001',name:'Alice'},{id:'user-002',name:'Bob'},{id:'user-003',name:'Charlie'}]});
+  clearEvents();loadScenario();toast('Reset — 3 seed users on all devices');
+}
+async function cfMerge(deviceId,conflictId){
+  const r=await post(`/api/multi/devices/${deviceId}/conflicts/${conflictId}/auto-merge`,{});
+  const d=await r.json();
+  if(d.ok){toast('CRDT merge applied');renderConflicts();}else toast('No schema — use local/remote');
+}
+async function cfApply(deviceId,conflictId,side){
+  const r=await fetch('/api/multi/conflicts');const all=await r.json();
+  const c=all.find(x=>x.id===conflictId);if(!c)return;
+  await post(`/api/multi/devices/${deviceId}/conflicts/${conflictId}/manual-merge`,{data:side==='local'?(c.localVersion.data??{}):(c.remoteVersion.data??{})});
+  toast(`Applied ${side} version`);renderConflicts();
+}
+async function mergeAllDevices(){
+  for(const id of Object.keys(snapshots))await post(`/api/multi/devices/${id}/merge-all`,{});
+  toast('Auto-merged all conflicts');renderConflicts();
+}
+
+const SEED=[{id:'user-001',name:'Alice'},{id:'user-002',name:'Bob'},{id:'user-003',name:'Charlie'}];
+const p=(url,body)=>post(url,body);
+const SCENARIOS={
+  'three-way':{name:'Three-Way Conflict',steps:[
+    {label:'Reset and seed',hint:'Seed Alice/Bob/Charlie via Alpha, then sync all',run:()=>p('/api/multi/reset',{users:SEED})},
+    {label:'All offline',hint:'All 3 devices lose connectivity',run:()=>Promise.all(['device-alpha','device-beta','device-gamma'].map(id=>p(`/api/multi/devices/${id}/offline`,{offline:true})))},
+    {label:'Alpha edits Alice',hint:'"Alice (Alpha)" — queued locally',run:()=>p('/api/multi/devices/device-alpha/update-user',{userId:'user-001',name:'Alice (Alpha)'})},
+    {label:'Beta edits Alice',hint:'"Alice (Beta)" — different value, same record',run:()=>p('/api/multi/devices/device-beta/update-user',{userId:'user-001',name:'Alice (Beta)'})},
+    {label:'Gamma edits Alice',hint:'"Alice (Gamma)" — third concurrent write',run:()=>p('/api/multi/devices/device-gamma/update-user',{userId:'user-001',name:'Alice (Gamma)'})},
+    {label:'Reconnect all',hint:'All devices come back online',run:()=>Promise.all(['device-alpha','device-beta','device-gamma'].map(id=>p(`/api/multi/devices/${id}/offline`,{offline:false})))},
+    {label:'Sync Alpha',hint:'Alpha pushes first',run:()=>p('/api/multi/devices/device-alpha/sync',{})},
+    {label:'Sync Beta — conflict',hint:'Beta pulls Alpha version, conflict detected',run:()=>p('/api/multi/devices/device-beta/sync',{})},
+    {label:'Sync Gamma — conflict',hint:'Gamma pulls merged state, another conflict',run:()=>p('/api/multi/devices/device-gamma/sync',{})},
+    {label:'CRDT merge all',hint:'text-merge across all three versions',run:()=>Promise.all(['device-alpha','device-beta','device-gamma'].map(id=>p(`/api/multi/devices/${id}/merge-all`,{})))},
+  ]},
+  'partition':{name:'Partition and Rejoin',steps:[
+    {label:'Reset and seed',hint:'Seed baseline on all devices',run:()=>p('/api/multi/reset',{users:SEED})},
+    {label:'Gamma partitions',hint:'Only Gamma goes offline',run:()=>p('/api/multi/devices/device-gamma/offline',{offline:true})},
+    {label:'Alpha adds Dave',hint:'New user, synced while Gamma is offline',run:async()=>{await p('/api/multi/devices/device-alpha/write-user',{userId:'user-004',name:'Dave'});await p('/api/multi/devices/device-alpha/sync',{});}},
+    {label:'Beta updates Bob',hint:'"Bob (Beta)" — synced to server',run:async()=>{await p('/api/multi/devices/device-beta/update-user',{userId:'user-002',name:'Bob (Beta)'});await p('/api/multi/devices/device-beta/sync',{});}},
+    {label:'Alpha syncs again',hint:'Alpha pulls Beta update',run:()=>p('/api/multi/devices/device-alpha/sync',{})},
+    {label:'Gamma rejoins',hint:'Gamma comes back online',run:()=>p('/api/multi/devices/device-gamma/offline',{offline:false})},
+    {label:'Gamma syncs — catches up',hint:'Gamma pulls Dave and Bob update',run:()=>p('/api/multi/devices/device-gamma/sync',{})},
+  ]},
+  'cascade':{name:'Cascading CRDT Merge',steps:[
+    {label:'Reset and seed',hint:'Seed Alice/Bob/Charlie',run:()=>p('/api/multi/reset',{users:SEED})},
+    {label:'Alpha updates Bob (A)',hint:'"Bob (A)" — synced immediately',run:async()=>{await p('/api/multi/devices/device-alpha/update-user',{userId:'user-002',name:'Bob (A)'});await p('/api/multi/devices/device-alpha/sync',{});}},
+    {label:'Beta updates Bob (B)',hint:'"Bob (B)" — concurrent, conflicts',run:async()=>{await p('/api/multi/devices/device-beta/update-user',{userId:'user-002',name:'Bob (B)'});await p('/api/multi/devices/device-beta/sync',{});}},
+    {label:'CRDT merge on Beta',hint:'text-merge: "Bob (A) | Bob (B)"',run:()=>p('/api/multi/devices/device-beta/merge-all',{})},
+    {label:'Gamma syncs',hint:'Gamma pulls the merged result',run:()=>p('/api/multi/devices/device-gamma/sync',{})},
+    {label:'Gamma updates Bob (C)',hint:'"Bob (C)" — edit on top of merged value',run:async()=>{await p('/api/multi/devices/device-gamma/update-user',{userId:'user-002',name:'Bob (C)'});await p('/api/multi/devices/device-gamma/sync',{});}},
+    {label:'Alpha syncs — cascade',hint:'Alpha pulls and merges with (C)',run:async()=>{await p('/api/multi/devices/device-alpha/sync',{});await p('/api/multi/devices/device-alpha/merge-all',{});}},
+  ]},
+};
+
+let currentScenario='three-way',currentStep=-1,stepStates=[];
+function loadScenario(){
+  currentScenario=document.getElementById('scn-sel').value;currentStep=-1;
+  stepStates=SCENARIOS[currentScenario].steps.map(()=>'pending');renderScenarioUI();
+}
+function renderScenarioUI(){
+  const s=SCENARIOS[currentScenario],steps=s.steps;
+  document.getElementById('scn-dots').innerHTML=steps.map((_,i)=>`<div class="scn-dot ${stepStates[i]==='done'?'done':i===currentStep?'cur':''}"></div>`).join('');
+  document.getElementById('scn-prog').textContent=`${Math.max(0,currentStep)}/${steps.length}`;
+  const step=steps[Math.max(0,currentStep)]??steps[0];
+  document.getElementById('scn-title').textContent=step?`Step ${Math.max(1,currentStep+1)}: ${step.label}`:'—';
+  document.getElementById('scn-hint').textContent=step?.hint??'';
+  document.getElementById('scn-steps').innerHTML=steps.map((st,i)=>{
+    const cls=i<currentStep?'done':i===currentStep?'active':'';
+    return `<div class="step-item ${cls}"><div class="step-idx ${cls}">${i<currentStep?'v':i+1}</div><div><div class="step-lbl">${esc(st.label)}</div><div class="step-hint">${esc(st.hint)}</div></div></div>`;
+  }).join('');
+  const btn=document.getElementById('btn-run');
+  btn.textContent=currentStep<0?'Start':currentStep>=steps.length-1?'Done':'Next Step';
+  btn.disabled=currentStep>=steps.length;
+}
+async function runStep(){
+  const s=SCENARIOS[currentScenario];
+  if(currentStep>=s.steps.length)return;currentStep++;
+  if(currentStep>=s.steps.length){renderScenarioUI();return;}
+  const step=s.steps[currentStep];stepStates[currentStep]='running';renderScenarioUI();toast(`${step.label}...`);
+  try{await step.run();stepStates[currentStep]='done';toast(step.label+' done');}
+  catch(err){stepStates[currentStep]='error';toast(`Error: ${err}`);}
+  renderScenarioUI();renderConflicts();
+}
+function prevStep(){if(currentStep>0){currentStep--;stepStates[currentStep]='pending';renderScenarioUI();}}
+
+async function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<5)return 'now';if(d<60)return d+'s';if(d<3600)return Math.floor(d/60)+'m';return Math.floor(d/3600)+'h';}
+let toastTimer;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
+
+loadScenario();
+fetch('/api/multi/events-log?limit=40').then(r=>r.json()).then(evts=>{for(const e of [...evts].reverse())ingestEvent(e);});
+</script>
+</body>
+</html>

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>edge-native-db</title>
+<style>
+:root {
+  --bg:  #ffffff;
+  --sf:  #f8f8f8;
+  --sf2: #f0f0f0;
+  --bd:  #e0e0e0;
+  --bd2: #c8c8c8;
+  --tx:  #000000;
+  --tx2: #555555;
+  --tx3: #999999;
+  --mono: ui-monospace,'JetBrains Mono','Fira Code',Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--tx);font-family:var(--mono);
+  font-size:13px;line-height:1.7;overflow-x:hidden}
+a{color:var(--tx);text-decoration:none;border-bottom:1px solid var(--bd2)}
+a:hover{border-bottom-color:var(--tx)}
+
+nav{position:sticky;top:0;z-index:99;background:rgba(255,255,255,.95);
+  backdrop-filter:blur(6px);border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;gap:14px;padding:0 32px;height:44px}
+.nav-logo{font-size:13px;font-weight:700;letter-spacing:.5px;border:none}
+.nav-ver{font-size:9px;padding:1px 6px;border-radius:2px;border:1px solid var(--bd2);
+  color:var(--tx3);font-weight:600}
+nav a{font-size:11px;color:var(--tx3);border:none}
+nav a:hover{color:var(--tx)}
+.nav-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+.nav-btn{font-size:11px;padding:4px 14px;border-radius:2px;
+  border:1px solid var(--tx);color:var(--tx);font-family:var(--mono);background:var(--bg)}
+.nav-btn:hover{background:var(--tx);color:var(--bg)}
+
+.hero{padding:60px 32px 48px;max-width:860px;margin:0 auto}
+.eyebrow{font-size:10px;color:var(--tx2);font-weight:600;letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:14px}
+h1{font-size:32px;font-weight:700;line-height:1.2;margin-bottom:18px}
+.sub{font-size:13px;color:var(--tx2);max-width:540px;margin-bottom:28px;line-height:1.8}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:36px}
+.btn-primary{padding:8px 20px;background:var(--tx);color:var(--bg);
+  font-weight:700;border-radius:2px;font-size:12px;font-family:var(--mono);border:none}
+.btn-primary:hover{opacity:.85}
+.btn-ghost{padding:8px 20px;background:transparent;color:var(--tx2);
+  font-weight:600;border-radius:2px;font-size:12px;border:1px solid var(--bd2);font-family:var(--mono)}
+.btn-ghost:hover{border-color:var(--tx2);color:var(--tx)}
+.install-block{background:var(--sf);border:1px solid var(--bd);border-radius:2px;
+  padding:10px 16px;display:inline-flex;align-items:center;gap:12px;font-size:12px}
+.install-prompt{color:var(--tx3)}
+.install-cmd{font-weight:600}
+.copy-btn{font-size:10px;padding:2px 8px;border-radius:2px;border:1px solid var(--bd2);
+  background:transparent;color:var(--tx3);cursor:pointer;font-family:var(--mono)}
+.copy-btn:hover{border-color:var(--tx2);color:var(--tx)}
+
+hr{border:none;border-top:1px solid var(--bd);margin:0 32px}
+section{max-width:860px;margin:0 auto;padding:0 32px 52px}
+.sec-eye{font-size:10px;color:var(--tx2);font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:8px;padding-top:48px}
+h2{font-size:20px;font-weight:700;margin-bottom:14px}
+h3{font-size:13px;font-weight:700;margin-bottom:8px}
+p{color:var(--tx2);margin-bottom:12px}
+
+.uc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px}
+.uc-card{background:var(--sf);border:1px solid var(--bd);border-radius:2px;padding:16px}
+.uc-abbr{font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.5px;
+  text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bd)}
+.uc-card h3{font-size:12px;margin-bottom:6px}
+.uc-card p{font-size:11px;margin:0}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.tag{font-size:9px;padding:1px 6px;border-radius:2px;
+  background:var(--sf2);border:1px solid var(--bd2);color:var(--tx3);font-weight:600}
+
+.code-block{background:var(--sf);border:1px solid var(--bd);border-radius:2px;
+  padding:14px 16px;margin-bottom:12px;overflow-x:auto}
+.code-block pre{margin:0;font-size:11px;line-height:1.8;color:var(--tx2)}
+.kw{color:var(--tx);font-weight:600}.str{color:var(--tx)}.cmt{color:var(--tx3)}
+.fn{color:var(--tx)}.ty{color:var(--tx2)}.prop{color:var(--tx2)}.num{color:var(--tx)}
+
+.arch-block{background:var(--sf);border:1px solid var(--bd);border-radius:2px;padding:18px;margin-bottom:14px}
+.arch-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:11px}
+.arch-row:last-child{margin:0}
+.arch-box{padding:4px 10px;border-radius:2px;font-weight:600;font-size:11px;
+  white-space:nowrap;background:var(--sf2);border:1px solid var(--bd2);color:var(--tx2)}
+.arch-arr{color:var(--tx3);font-size:13px;flex-shrink:0}
+.arch-desc{color:var(--tx3);flex:1;font-size:10px}
+
+table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}
+th{padding:7px 12px;background:var(--sf);border:1px solid var(--bd);
+  color:var(--tx3);font-weight:600;text-align:left;text-transform:uppercase;font-size:10px;letter-spacing:.5px}
+td{padding:7px 12px;border:1px solid var(--bd);color:var(--tx3)}
+td:first-child{color:var(--tx2);font-weight:600}
+.yes{color:var(--tx);font-weight:700}.no{color:var(--tx3)}.partial{color:var(--tx2)}
+
+.deploy-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.deploy-card{background:var(--sf);border:1px solid var(--bd);border-radius:2px;padding:14px}
+.deploy-card h3{color:var(--tx2);margin-bottom:8px;font-size:12px}
+.deploy-card p{font-size:11px;margin-bottom:8px}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.list-card{background:var(--sf);border:1px solid var(--bd);border-radius:2px;padding:14px}
+.list-card.warn{border-top:2px solid var(--bd2)}
+.list-card.ok{border-top:2px solid var(--tx)}
+.list-title{font-size:11px;font-weight:700;margin-bottom:8px;color:var(--tx2)}
+.list-card li{color:var(--tx2);font-size:11px;margin-left:16px;margin-bottom:4px;line-height:1.6}
+.list-card code{font-family:var(--mono);font-size:10px;background:var(--sf2);
+  padding:1px 4px;border-radius:2px;border:1px solid var(--bd2);color:var(--tx2)}
+
+footer{border-top:1px solid var(--bd);padding:20px 32px;display:flex;
+  align-items:center;gap:14px;font-size:10px;color:var(--tx3);
+  max-width:860px;margin:0 auto}
+footer a{color:var(--tx3);border:none}
+
+@media(max-width:680px){
+  .uc-grid,.deploy-grid,.two-col{grid-template-columns:1fr}
+  h1{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-logo">edge-native-db</span>
+  <span class="nav-ver">v0.1.0</span>
+  <a href="#quickstart">Quickstart</a>
+  <a href="#usecases">Use Cases</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#deploy">Deploy</a>
+  <a href="#limits">Limits</a>
+  <a href="#roadmap">Roadmap</a>
+  <div class="nav-right">
+    <a href="/devtools" class="nav-btn">DevTools</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="eyebrow">Offline-First &middot; Edge-Native &middot; TypeScript</div>
+  <h1>Sync that works when<br>the network doesn't.</h1>
+  <p class="sub">
+    An embeddable sync engine for applications that must work offline
+    and converge correctly when connectivity returns. Built on SQLite WAL,
+    Hybrid Logical Clocks, and field-level CRDT merge.
+  </p>
+  <div class="hero-actions">
+    <a href="#quickstart" class="btn-primary">Get started</a>
+    <a href="/devtools" class="btn-ghost">Open DevTools</a>
+    <a href="/multi" class="btn-ghost">Live Demo</a>
+  </div>
+  <div class="install-block">
+    <span class="install-prompt">$</span>
+    <span class="install-cmd">npm install edge-native-db</span>
+    <button class="copy-btn" onclick="copyInstall()">copy</button>
+  </div>
+</div>
+
+<hr>
+
+<section id="usecases">
+  <div class="sec-eye">Use Cases</div>
+  <h2>Built for the disconnected world.</h2>
+  <p>Any application where writes must succeed without a live server connection
+     and data must converge correctly when devices reconnect.</p>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-abbr">Industrial / IoT</div>
+      <h3>Sensors and gateways</h3>
+      <p>Sensors writing readings at the edge. Network partitions are normal.
+         Data lands in SQLite first, syncs when connectivity allows.
+         HLC ordering keeps time-series data coherent across devices
+         without trusting wall clocks.</p>
+      <div class="tags">
+        <span class="tag">SCADA</span><span class="tag">PLCs</span><span class="tag">Gateway nodes</span>
+      </div>
+    </div>
+    <div class="uc-card">
+      <div class="uc-abbr">Field Operations</div>
+      <h3>No-signal fieldwork</h3>
+      <p>Inspectors and field technicians in areas with no signal. Forms and
+         status updates queue locally and flush when connectivity returns.
+         Conflict resolution handles concurrent edits from two tablets.</p>
+      <div class="tags">
+        <span class="tag">Inspections</span><span class="tag">Asset management</span><span class="tag">Work orders</span>
+      </div>
+    </div>
+    <div class="uc-card">
+      <div class="uc-abbr">Offline-First Apps</div>
+      <h3>Instant local reads and writes</h3>
+      <p>PWAs and Electron apps that feel instant because reads and writes
+         hit local SQLite. The sync loop runs in the background.
+         End users never wait for the network.</p>
+      <div class="tags">
+        <span class="tag">PWA</span><span class="tag">Electron</span><span class="tag">Tauri</span>
+      </div>
+    </div>
+    <div class="uc-card">
+      <div class="uc-abbr">Healthcare</div>
+      <h3>Clinical data capture</h3>
+      <p>Clinical data capture in environments with poor WiFi. Patient records
+         written locally, synced via opportunistic connectivity.
+         Every version is logged with device ID and timestamp.</p>
+      <div class="tags">
+        <span class="tag">EMR</span><span class="tag">Clinical trials</span><span class="tag">Audit trail</span>
+      </div>
+    </div>
+    <div class="uc-card">
+      <div class="uc-abbr">Maritime / Remote</div>
+      <h3>Satellite and intermittent WAN</h3>
+      <p>Vessels and remote sites with satellite links that drop for hours.
+         The 15s to 60s exponential backoff cycle means the system
+         self-heals without operator intervention.</p>
+      <div class="tags">
+        <span class="tag">Satcom</span><span class="tag">Store-and-forward</span>
+      </div>
+    </div>
+    <div class="uc-card">
+      <div class="uc-abbr">Retail / POS</div>
+      <h3>Terminals that keep working</h3>
+      <p>Point-of-sale terminals that process transactions even when the
+         back-office connection drops. CRDT merge handles concurrent
+         stock adjustments from multiple terminals.</p>
+      <div class="tags">
+        <span class="tag">POS</span><span class="tag">Inventory</span><span class="tag">Kiosks</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<section id="quickstart">
+  <div class="sec-eye">SDK Design</div>
+  <h2>Zero-config quickstart.</h2>
+
+  <h3>1. Install</h3>
+  <div class="code-block"><pre><span class="cmt"># Requires Node.js 22+ (uses built-in node:sqlite)</span>
+npm install edge-native-db</pre></div>
+
+  <h3>2. Connect and write</h3>
+  <div class="code-block"><pre><span class="kw">import</span> { <span class="ty">EdgeDB</span> } <span class="kw">from</span> <span class="str">'edge-native-db'</span>;
+
+<span class="kw">const</span> db = <span class="kw">new</span> <span class="ty">EdgeDB</span>({
+  nodeId:      <span class="str">'field-unit-42'</span>,
+  dbPath:      <span class="str">'./data/field.db'</span>,
+  upstreamUrl: <span class="str">'https://sync.example.com'</span>,
+  mergeSchemas: {
+    tasks: { title: <span class="str">'text-merge'</span>, done: <span class="str">'max'</span>, updated_at: <span class="str">'max'</span> },
+  },
+});
+
+db.<span class="fn">connect</span>();
+
+<span class="kw">type</span> <span class="ty">Task</span> = { id: <span class="ty">string</span>; title: <span class="ty">string</span>; done: <span class="ty">boolean</span>; updated_at: <span class="ty">number</span> };
+<span class="kw">const</span> tasks = db.<span class="fn">collection</span>&lt;<span class="ty">Task</span>&gt;(<span class="str">'tasks'</span>);
+
+tasks.<span class="fn">upsert</span>({ id: <span class="str">'t1'</span>, title: <span class="str">'Inspect valve 7'</span>, done: <span class="kw">false</span>, updated_at: Date.<span class="fn">now</span>() });
+
+<span class="kw">const</span> unsub = tasks.<span class="fn">subscribe</span>(items =&gt; console.<span class="fn">log</span>(<span class="str">`Tasks: <span class="prop">${items.length}</span>`</span>));</pre></div>
+
+  <h3>3. Sync control</h3>
+  <div class="code-block"><pre>db.sync.<span class="fn">force</span>();          <span class="cmt">// flush immediately</span>
+db.sync.<span class="fn">pause</span>();           <span class="cmt">// suspend background loop</span>
+db.sync.<span class="fn">setOffline</span>(<span class="kw">true</span>); <span class="cmt">// test offline mode</span>
+db.sync.status             <span class="cmt">// { pendingOps, syncState, connected, ... }</span></pre></div>
+
+  <h3>4. Server</h3>
+  <div class="code-block"><pre><span class="kw">import</span> { <span class="fn">createSyncServer</span> } <span class="kw">from</span> <span class="str">'edge-native-db/server'</span>;
+<span class="fn">createSyncServer</span>(<span class="num">3001</span>); <span class="cmt">// POST /sync + GET /health</span></pre></div>
+
+  <h3>5. Introspection</h3>
+  <div class="code-block"><pre>db.inspect.<span class="fn">queue</span>()           <span class="cmt">// per-op lifecycle state</span>
+db.inspect.<span class="fn">syncLog</span>()         <span class="cmt">// cycle history with durations</span>
+db.inspect.<span class="fn">errors</span>()          <span class="cmt">// failures with timestamps</span>
+db.inspect.<span class="fn">conflicts</span>()       <span class="cmt">// full conflict history</span>
+db.inspect.<span class="fn">previewMerge</span>(id)  <span class="cmt">// see merged result before applying</span>
+db.inspect.<span class="fn">applyAutoMerge</span>(id)<span class="cmt">// apply CRDT resolution</span></pre></div>
+
+  <h3>CRDT merge strategies</h3>
+  <div class="code-block"><pre><span class="str">'text-merge'</span>  <span class="cmt">// "Alice | Bob"  — sorted, joined by |</span>
+<span class="str">'max'</span>         <span class="cmt">// max(local, remote) — counters, timestamps</span>
+<span class="str">'set-union'</span>   <span class="cmt">// union of JSON arrays — tags, permissions</span>
+<span class="str">'lww'</span>         <span class="cmt">// Last-Write-Wins (default for unlisted fields)</span></pre></div>
+</section>
+
+<hr>
+
+<section id="architecture">
+  <div class="sec-eye">Architecture</div>
+  <h2>How it works.</h2>
+  <div class="arch-block">
+    <div class="arch-row">
+      <div class="arch-box">App write</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">HLC.now()</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">SQLite WAL</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">oplog + changes + entity</div>
+      <span class="arch-desc">Atomic BEGIN/COMMIT — all three tables or nothing</span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-box">5s timer</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">POST /sync</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">Server dedup</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">Per-device cursor</div>
+      <span class="arch-desc">One round-trip: push pending ops, pull remote ops</span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-box">Remote op</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">Conflict?</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">CRDT merge / LWW</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">Commit + log</div>
+      <span class="arch-desc">Same result on every device for the same conflict pair</span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-box">NetworkMonitor</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">onChange(true)</div><span class="arch-arr">&rarr;</span>
+      <div class="arch-box">Immediate sync</div>
+      <span class="arch-desc">3s probe — reconnects within &le;3s of connectivity restoration</span>
+    </div>
+  </div>
+
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Feature</th><th>edge-native-db</th><th>PouchDB / CouchDB</th><th>PowerSync</th><th>Electric SQL</th></tr>
+    <tr><td>Node.js, no native modules</td><td class="yes">yes</td><td class="no">no — leveldown</td><td class="yes">yes</td><td class="yes">yes</td></tr>
+    <tr><td>SQLite WAL storage</td><td class="yes">yes</td><td class="no">LevelDB</td><td class="yes">yes</td><td class="yes">yes</td></tr>
+    <tr><td>Field-level CRDT merge</td><td class="yes">yes — configurable</td><td class="partial">revisions only</td><td class="no">no</td><td class="no">no</td></tr>
+    <tr><td>HLC clock ordering</td><td class="yes">yes</td><td class="partial">revisions</td><td class="partial">seq numbers</td><td class="partial">seq numbers</td></tr>
+    <tr><td>Zero-dependency server</td><td class="yes">yes — SQLite only</td><td class="no">CouchDB process</td><td class="no">Postgres required</td><td class="no">Postgres required</td></tr>
+    <tr><td>Typed TypeScript SDK</td><td class="yes">yes</td><td class="partial">partial</td><td class="yes">yes</td><td class="yes">yes</td></tr>
+  </table>
+</section>
+
+<hr>
+
+<section id="deploy">
+  <div class="sec-eye">Deployment</div>
+  <h2>From laptop to fleet.</h2>
+  <div class="deploy-grid">
+    <div class="deploy-card">
+      <h3>Centralized server</h3>
+      <p>Single sync server on any Node.js host. Clients connect over HTTPS.</p>
+      <div class="code-block" style="margin:0"><pre>docker run -p 3001:3001 \
+  -v ./data:/data \
+  edge-native-db/server</pre></div>
+    </div>
+    <div class="deploy-card">
+      <h3>Multi-region</h3>
+      <p>One sync server per region. Regional servers sync to each other
+         via the same POST /sync protocol.</p>
+      <div class="code-block" style="margin:0"><pre>nodeId: 'server-eu-west-1'
+upstreamUrl: 'https://sync-us.example.com'</pre></div>
+    </div>
+    <div class="deploy-card">
+      <h3>LPWAN / intermittent</h3>
+      <p>IoT gateways with GPRS or LoRaWAN. The oplog is durable — no data
+         is lost if the device is offline for days.</p>
+      <div class="code-block" style="margin:0"><pre>SYNC_INTERVAL_MS=60_000
+CYCLE_RETRY_DELAYS=[120s, 300s, 600s]</pre></div>
+    </div>
+    <div class="deploy-card">
+      <h3>Air-gapped / local</h3>
+      <p>Devices sync on a local LAN. A lightweight gateway node runs the
+         sync server.</p>
+      <div class="code-block" style="margin:0"><pre>upstreamUrl: 'http://192.168.1.10:3001'</pre></div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<section id="limits">
+  <div class="sec-eye">Limitations</div>
+  <h2>What it cannot do yet.</h2>
+  <div class="two-col">
+    <div class="list-card warn">
+      <div class="list-title">Current limitations</div>
+      <ul>
+        <li>No browser storage — <code>node:sqlite</code> is Node-only. OPFS planned for v0.2.</li>
+        <li>No end-to-end encryption — TLS on the wire only.</li>
+        <li>CRDT schema is global per entity type, not per record.</li>
+        <li>Sync server is single-node SQLite, no horizontal scaling.</li>
+        <li>No schema migrations — entity payloads are schemaless JSON.</li>
+        <li>HLC drift limit of ~300s — use NTP.</li>
+        <li>No partial sync — every device receives all changes.</li>
+        <li>No binary or blob support — payloads are JSON.</li>
+      </ul>
+    </div>
+    <div class="list-card warn">
+      <div class="list-title">Known trade-offs</div>
+      <ul>
+        <li><code>text-merge</code> produces "Alice | Bob" — not suitable for rich text. Use Yjs or Automerge for document content.</li>
+        <li>Last-Write-Wins silently discards the losing write for fields without a CRDT strategy.</li>
+        <li>No optimistic rollback — local writes commit immediately.</li>
+        <li>SQLite serializes writes — use separate DB files per entity namespace for high-throughput IoT.</li>
+        <li>Op log grows indefinitely — no compaction or GC yet.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<section id="roadmap">
+  <div class="sec-eye">Roadmap</div>
+  <h2>What is next.</h2>
+  <div class="two-col">
+    <div class="list-card ok">
+      <div class="list-title">v0.2 — Storage and browser</div>
+      <ul>
+        <li>Browser adapter — OPFS with IndexedDB fallback</li>
+        <li>React hooks: <code>useCollection()</code>, <code>useSyncStatus()</code></li>
+        <li>Op log compaction and tombstone GC</li>
+        <li>Structured query: <code>collection.where()</code></li>
+        <li>Encryption at rest via SQLite cipher</li>
+      </ul>
+    </div>
+    <div class="list-card ok">
+      <div class="list-title">v0.3 — Network and scale</div>
+      <ul>
+        <li>WebSocket transport for lower latency</li>
+        <li>Server-sent subscriptions per entity type</li>
+        <li>Partial sync — device declares which types to replicate</li>
+        <li>mDNS peer discovery for LAN-only deployments</li>
+        <li>Server clustering via CRDTs between nodes</li>
+      </ul>
+    </div>
+    <div class="list-card ok">
+      <div class="list-title">v0.4 — CRDT and merge</div>
+      <ul>
+        <li>Yjs and Automerge adapter for rich-text fields</li>
+        <li>Custom merge callback: <code>(local, remote) => merged</code></li>
+        <li>Per-entity merge schema override</li>
+        <li>Conflict preview UI as embeddable web component</li>
+      </ul>
+    </div>
+    <div class="list-card ok">
+      <div class="list-title">v0.5 — Production hardening</div>
+      <ul>
+        <li>JWT auth middleware on sync server</li>
+        <li>Row-level access control per device</li>
+        <li>Rate limiting and backpressure</li>
+        <li>OpenTelemetry instrumentation</li>
+        <li>Signed ops to prevent forged <code>nodeId</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<footer>
+  <span>edge-native-db v0.1.0</span>
+  <span>&middot;</span><span>MIT License</span>
+  <span>&middot;</span><a href="/devtools">DevTools</a>
+  <span>&middot;</span><a href="/multi">Multi-Device Demo</a>
+  <span>&middot;</span><a href="/">Single-Device Demo</a>
+  <span style="margin-left:auto">Node.js 22+ &middot; SQLite WAL &middot; TypeScript 5</span>
+</footer>
+
+<script>
+function copyInstall(){
+  navigator.clipboard?.writeText('npm install edge-native-db').catch(()=>{});
+  const btn=event.target;btn.textContent='copied';
+  setTimeout(()=>btn.textContent='copy',1500);
+}
+</script>
+</body>
+</html>

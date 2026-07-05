@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EdgeDB DevTools</title>
+<style>
+:root {
+  --bg:  #ffffff;
+  --sf:  #f8f8f8;
+  --sf2: #f0f0f0;
+  --bd:  #e0e0e0;
+  --bd2: #c8c8c8;
+  --tx:  #000000;
+  --tx2: #555555;
+  --tx3: #999999;
+  --mono: ui-monospace,'JetBrains Mono','Fira Code',Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--tx);
+  font-family:var(--mono);font-size:12px;overflow:hidden}
+
+#hdr{display:flex;align-items:center;gap:10px;padding:0 14px;height:40px;
+  background:var(--bg);border-bottom:1px solid var(--bd)}
+#hdr h1{font-size:12px;font-weight:700;letter-spacing:.5px}
+.dot{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--bd2);flex-shrink:0;transition:all .3s}
+.dot.on{background:var(--tx);border-color:var(--tx)}
+.dot.sync{background:var(--tx);border-color:var(--tx);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+#sync-state{font-size:10px;padding:1px 6px;border-radius:2px;border:1px solid var(--bd2);color:var(--tx3)}
+#sync-state.syncing{border-color:var(--tx);color:var(--tx)}
+#sync-state.retrying{border-color:var(--tx2);color:var(--tx2)}
+#sync-state.offline{border-color:var(--tx2);color:var(--tx2)}
+#node-id{font-size:10px;color:var(--tx3)}
+#hdr-right{margin-left:auto;display:flex;gap:6px}
+
+#tabs{display:flex;background:var(--sf);border-bottom:1px solid var(--bd);padding:0 14px}
+.tab{padding:8px 14px;cursor:pointer;font-size:11px;color:var(--tx3);
+  border-bottom:2px solid transparent;transition:color .1s}
+.tab:hover{color:var(--tx2)}
+.tab.active{color:var(--tx);border-bottom-color:var(--tx)}
+
+#content{height:calc(100vh - 79px);overflow:hidden;display:flex;flex-direction:column}
+.tab-pane{display:none;flex:1;overflow:hidden}
+.tab-pane.active{display:flex}
+
+.pane-grid{display:grid;width:100%;overflow:hidden}
+.panel{display:flex;flex-direction:column;border-right:1px solid var(--bd);overflow:hidden}
+.panel:last-child{border-right:none}
+.panel-hdr{padding:7px 11px;background:var(--sf);border-bottom:1px solid var(--bd);
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--tx2);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.panel-body{flex:1;overflow-y:auto;padding:9px 11px}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:12px}
+.stat-cell{background:var(--sf);padding:8px 12px}
+.stat-n{font-size:20px;font-weight:700;line-height:1.1}
+.stat-l{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px}
+
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.info-block{font-size:11px;line-height:2}
+.info-label{color:var(--tx3)}
+.info-val{font-weight:600}
+
+.tl-row{display:flex;align-items:center;gap:8px;padding:3px 0;
+  border-bottom:1px solid var(--bd);font-size:10px}
+.tl-row:last-child{border:none}
+.tl-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.tl-ok{background:var(--tx)}.tl-fail{border:1.5px solid var(--tx2);background:transparent}
+.tl-bar-wrap{flex:1;height:2px;background:var(--bd);border-radius:1px;overflow:hidden}
+.tl-bar{height:100%;border-radius:1px;background:var(--tx);min-width:2px}
+.tl-bar.fail{background:var(--tx2)}
+.tl-dur{color:var(--tx3);white-space:nowrap;width:48px;text-align:right;font-size:10px}
+.tl-info{color:var(--tx2);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+
+.q-row{display:flex;align-items:center;gap:5px;padding:3px 7px;border-radius:2px;
+  margin-bottom:2px;background:var(--sf);border:1px solid var(--bd);font-size:10px}
+.q-row.sending{border-color:var(--tx);animation:pulse .9s infinite}
+.q-row.sent{opacity:.5}
+.q-row.failed{border-left:2px solid var(--tx)}
+.q-status{font-size:9px;font-weight:600;text-transform:uppercase;width:50px;flex-shrink:0;color:var(--tx2)}
+.q-row.sending .q-status,.q-row.failed .q-status{color:var(--tx)}
+.q-op{color:var(--tx3);width:40px;flex-shrink:0;font-size:9px}
+.q-id{flex:1;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-err{font-size:9px;color:var(--tx2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.op-row{display:grid;grid-template-columns:44px 80px 1fr 76px 60px;
+  gap:6px;padding:3px 0;border-bottom:1px solid var(--bd);font-size:10px;align-items:center}
+.op-row:last-child{border:none}
+.op-type{font-size:9px;font-weight:600;padding:1px 5px;border-radius:2px;
+  background:var(--sf2);border:1px solid var(--bd2);color:var(--tx2);text-align:center}
+.op-type.insert,.op-type.update,.op-type.delete{color:var(--tx);border-color:var(--bd2)}
+.op-entity{color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-id{color:var(--tx3);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-age{font-size:9px;color:var(--tx3)}
+.op-synced{font-size:9px;text-align:right;color:var(--tx3)}
+.op-synced.yes{color:var(--tx);font-weight:600}
+
+.cf{border:1px solid var(--bd);border-radius:2px;margin-bottom:7px;overflow:hidden}
+.cf.unresolved{border-left:3px solid var(--tx)}
+.cf.merged{border-left:3px solid var(--tx2)}
+.cf-hdr{display:flex;align-items:center;gap:5px;padding:5px 9px;
+  background:var(--sf);border-bottom:1px solid var(--bd);font-size:10px}
+.cf-rec{flex:1;font-weight:600}
+.cf-grid{display:grid;grid-template-columns:1fr 1fr;font-size:10px}
+.cf-side{padding:5px 9px}
+.cf-side:first-child{border-right:1px solid var(--bd)}
+.cf-lbl{font-size:8px;text-transform:uppercase;color:var(--tx3);margin-bottom:2px;font-weight:600}
+.cf-val{font-weight:600}
+.cf-dev{font-size:9px;color:var(--tx3)}
+.cf-merged{grid-column:1/-1;border-top:1px solid var(--bd);background:var(--sf);padding:5px 9px}
+.cf-foot{padding:4px 9px;border-top:1px solid var(--bd);display:flex;gap:4px;align-items:center}
+.cf-id{font-size:9px;color:var(--tx3);flex:1}
+
+#log-toolbar{display:flex;gap:6px;padding:6px 11px;border-bottom:1px solid var(--bd);
+  background:var(--sf);flex-shrink:0;flex-wrap:wrap}
+.log-row{display:flex;align-items:flex-start;gap:7px;padding:3px 0;
+  border-bottom:1px solid var(--bd);font-size:10px;line-height:1.5}
+.log-row:last-child{border:none}
+.log-ts{color:var(--tx3);white-space:nowrap;font-size:9px;margin-top:1px;flex-shrink:0;width:90px}
+.log-lvl{font-size:9px;font-weight:600;padding:1px 5px;border-radius:2px;
+  white-space:nowrap;flex-shrink:0;border:1px solid var(--bd2);color:var(--tx2);background:var(--sf2)}
+.lvl-info{border-color:var(--tx);color:var(--tx)}
+.lvl-warn,.lvl-error{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.log-cat{font-size:9px;color:var(--tx3);white-space:nowrap;flex-shrink:0;width:56px}
+.log-msg{flex:1;color:var(--tx2)}
+.log-meta{font-size:9px;color:var(--tx3);white-space:pre;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+
+button{background:var(--bg);border:1px solid var(--bd2);color:var(--tx2);
+  font-family:var(--mono);font-size:10px;padding:3px 7px;cursor:pointer;border-radius:2px;
+  transition:all .1s}
+button:hover{border-color:var(--tx2);color:var(--tx);background:var(--sf)}
+.btn-b{border-color:var(--tx);color:var(--tx)}
+.btn-b:hover{background:var(--sf2)}
+.btn-g{border-color:var(--tx);color:var(--tx)}
+.btn-g:hover{background:var(--sf2)}
+.btn-r{border-color:var(--tx2);color:var(--tx2)}
+.btn-r:hover{background:var(--sf)}
+input,select{background:var(--bg);border:1px solid var(--bd2);color:var(--tx);
+  font-family:var(--mono);font-size:10px;padding:3px 7px;border-radius:2px}
+input:focus,select:focus{outline:none;border-color:var(--tx)}
+
+.badge{display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;font-weight:600;
+  background:var(--sf2);color:var(--tx2);border:1px solid var(--bd2)}
+.bg{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.br{background:var(--bg);color:var(--tx);border-color:var(--tx)}
+.by{background:var(--sf2);color:var(--tx2)}
+.bb{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.section{margin-bottom:12px}
+.sec-title{font-size:10px;font-weight:600;color:var(--tx3);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.empty{color:var(--tx3);text-align:center;padding:14px;font-size:11px}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div class="dot" id="conn-dot"></div>
+  <h1>DEVTOOLS</h1>
+  <span id="sync-state">idle</span>
+  <span id="node-id"></span>
+  <div id="hdr-right">
+    <button class="btn-b" onclick="forceSync()">Sync</button>
+    <a href="/" style="font-size:10px;color:var(--tx3);text-decoration:none">Demo</a>
+    <a href="/multi" style="font-size:10px;color:var(--tx3);text-decoration:none">Multi-device</a>
+    <a href="/product" style="font-size:10px;color:var(--tx3);text-decoration:none">Docs</a>
+  </div>
+</div>
+
+<div id="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('inspector')">Sync Inspector</div>
+  <div class="tab" onclick="switchTab('logs')">Logs <span id="log-badge" style="font-size:9px;color:var(--tx3)"></span></div>
+</div>
+
+<div id="content">
+
+  <div class="tab-pane active" id="pane-overview">
+    <div style="width:100%;overflow-y:auto;padding:12px 14px">
+
+      <div class="stat-row">
+        <div class="stat-cell"><div class="stat-n" id="ov-pending">—</div><div class="stat-l">Pending Ops</div></div>
+        <div class="stat-cell"><div class="stat-n" id="ov-conflicts">—</div><div class="stat-l">Conflicts</div></div>
+        <div class="stat-cell"><div class="stat-n" id="ov-errors">—</div><div class="stat-l">Cycle Errors</div></div>
+        <div class="stat-cell"><div class="stat-n" id="ov-circuit">—</div><div class="stat-l">Circuit</div></div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-block">
+          <div class="sec-title">Connection</div>
+          <div><span class="info-label">Node ID </span><span class="info-val" id="ov-node">—</span></div>
+          <div><span class="info-label">State </span><span class="info-val" id="ov-state">—</span></div>
+          <div><span class="info-label">Connected </span><span class="info-val" id="ov-connected">—</span></div>
+          <div><span class="info-label">Last sync </span><span class="info-val" id="ov-lastsync">—</span></div>
+          <div><span class="info-label">Retry count </span><span class="info-val" id="ov-retries">—</span></div>
+        </div>
+        <div class="info-block">
+          <div class="sec-title">Simulation</div>
+          <div><span class="info-label">Circuit </span><span class="info-val" id="ov-circuit-state">—</span></div>
+          <div><span class="info-label">Failures </span><span class="info-val" id="ov-failures">—</span></div>
+          <div><span class="info-label">Offline </span><span class="info-val" id="ov-sim-offline">—</span></div>
+          <div><span class="info-label">Latency </span><span class="info-val" id="ov-sim-lat">—</span></div>
+          <div><span class="info-label">Timeout </span><span class="info-val" id="ov-sim-tmo">—</span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Sync Timeline</div>
+        <div id="ov-timeline"><div class="empty">No sync cycles yet</div></div>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Recent Errors</div>
+        <div id="ov-errlog"><div class="empty">No errors</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="tab-pane" id="pane-inspector">
+    <div class="pane-grid" style="grid-template-columns:1fr 1fr 1fr;height:100%">
+
+      <div class="panel">
+        <div class="panel-hdr">
+          Queue <span id="q-badge" style="font-weight:400;color:var(--tx3)"></span>
+          <button onclick="loadInspector()" style="margin-left:auto;padding:1px 5px;font-size:9px">Refresh</button>
+        </div>
+        <div class="panel-body">
+          <div id="ins-queue"><div class="empty">Queue empty</div></div>
+          <div id="ins-retry" style="margin-top:8px;font-size:10px;color:var(--tx2)"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hdr">
+          Operation Log <span id="ops-count" style="font-weight:400;color:var(--tx3)"></span>
+          <div style="margin-left:auto">
+            <select id="ops-filter" onchange="loadOps()" style="font-size:9px;padding:1px 4px">
+              <option value="">All types</option>
+              <option value="insert">insert</option>
+              <option value="update">update</option>
+              <option value="delete">delete</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-body"><div id="ins-ops"><div class="empty">No ops yet</div></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hdr">
+          Conflicts <span id="cf-badge" style="font-weight:400;color:var(--tx3)"></span>
+          <select id="cf-filter" onchange="loadConflicts()" style="margin-left:auto;font-size:9px;padding:1px 4px">
+            <option value="">All</option>
+            <option value="unresolved">Unresolved</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+        <div class="panel-body" id="ins-conflicts"><div class="empty">No conflicts</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="tab-pane" id="pane-logs" style="flex-direction:column">
+    <div id="log-toolbar">
+      <select id="log-level" onchange="applyLogFilter()">
+        <option value="">All levels</option>
+        <option value="debug">debug</option>
+        <option value="info">info</option>
+        <option value="warn">warn</option>
+        <option value="error">error</option>
+      </select>
+      <select id="log-cat" onchange="applyLogFilter()">
+        <option value="">All categories</option>
+        <option value="sync">sync</option>
+        <option value="network">network</option>
+        <option value="storage">storage</option>
+        <option value="conflict">conflict</option>
+        <option value="sdk">sdk</option>
+        <option value="system">system</option>
+      </select>
+      <input id="log-search" placeholder="Search..." oninput="applyLogFilter()" style="width:180px">
+      <label style="display:flex;align-items:center;gap:4px;color:var(--tx3);font-size:10px;cursor:pointer">
+        <input type="checkbox" id="log-autoscroll" checked> Auto-scroll
+      </label>
+      <span id="log-count" style="font-size:10px;color:var(--tx3)"></span>
+      <button onclick="clearLogs()" class="btn-r" style="margin-left:auto">Clear</button>
+    </div>
+    <div id="log-list" style="flex:1;overflow-y:auto;padding:8px 11px"></div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+function switchTab(name) {
+  const tabs=['overview','inspector','logs'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id===`pane-${name}`));
+  if(name==='inspector')loadInspector();
+  if(name==='logs'){initLogStream();applyLogFilter();}
+}
+
+const es=new EventSource('/api/events');
+es.onmessage=e=>applyStatus(JSON.parse(e.data));
+es.onerror=()=>{document.getElementById('conn-dot').className='dot';};
+
+function applyStatus(s){
+  const dot=document.getElementById('conn-dot');
+  dot.className=s.syncing?'dot sync':s.connected?'dot on':'dot';
+  const badge=document.getElementById('sync-state');
+  badge.textContent=s.syncState??'idle';badge.className=s.syncState??'idle';
+  document.getElementById('node-id').textContent=s.nodeId??'';
+
+  const pEl=document.getElementById('ov-pending');
+  pEl.textContent=s.pendingOps??0;
+  pEl.style.fontWeight=s.pendingOps>0?'700':'400';
+
+  document.getElementById('ov-state').textContent=s.syncState??'idle';
+  document.getElementById('ov-node').textContent=s.nodeId??'—';
+  document.getElementById('ov-connected').textContent=s.connected?'yes':'no';
+  document.getElementById('ov-lastsync').textContent=s.lastSyncAt?relTime(s.lastSyncAt):'never';
+  document.getElementById('ov-retries').textContent=s.retryCount??0;
+
+  const cs=s.circuit?.state??'—';
+  document.getElementById('ov-circuit').textContent=cs;
+  document.getElementById('ov-circuit-state').textContent=cs;
+  document.getElementById('ov-failures').textContent=s.circuit?.failures??0;
+
+  const sim=s.simulation??{};
+  document.getElementById('ov-sim-offline').textContent=sim.offline?'yes':'no';
+  document.getElementById('ov-sim-lat').textContent=(sim.latencyMs??0)+'ms';
+  document.getElementById('ov-sim-tmo').textContent=sim.timeoutMs>0?sim.timeoutMs+'ms':'off';
+}
+
+async function loadOverview(){
+  const[log,errs,cfData]=await Promise.all([
+    get('/api/devtools/sync-log?limit=10'),get('/api/devtools/errors'),get('/api/devtools/conflicts'),
+  ]);
+  const cfEl=document.getElementById('ov-conflicts');cfEl.textContent=cfData.unresolvedCount??0;
+  const errEl=document.getElementById('ov-errors');errEl.textContent=errs.length??0;
+
+  const tl=document.getElementById('ov-timeline');
+  if(!Array.isArray(log)||!log.length){tl.innerHTML='<div class="empty">No sync cycles yet</div>';}
+  else{
+    const maxDur=Math.max(...log.map(a=>a.durationMs??0),1);
+    tl.innerHTML=log.map(a=>{
+      const dur=a.durationMs!=null?a.durationMs+'ms':'?ms';
+      const pct=Math.max(2,Math.round(((a.durationMs??0)/maxDur)*100));
+      const info=a.success?`sent ${a.sent} / received ${a.received}`:esc((a.error??'error').slice(0,60));
+      return `<div class="tl-row">
+        <div class="tl-dot ${a.success?'tl-ok':'tl-fail'}"></div>
+        <span style="color:var(--tx3);white-space:nowrap;width:60px">${relTime(a.startedAt)}</span>
+        <div class="tl-bar-wrap"><div class="tl-bar ${a.success?'':'fail'}" style="width:${pct}%"></div></div>
+        <span class="tl-dur">${dur}</span>
+        <span class="tl-info">${esc(info)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  const el=document.getElementById('ov-errlog');
+  if(!Array.isArray(errs)||!errs.length){el.innerHTML='<div class="empty">No errors</div>';}
+  else{el.innerHTML=errs.slice(0,5).map(e=>`
+    <div style="padding:4px 0;border-bottom:1px solid var(--bd)">
+      <div style="font-size:10px;font-weight:600">${esc(e.message.slice(0,100))}</div>
+      <div style="font-size:9px;color:var(--tx3);display:flex;gap:8px">
+        <span>${relTime(e.at)}</span><span>attempt #${e.attempt}</span><span>${e.pendingOps} pending</span>
+      </div>
+    </div>`).join('');}
+}
+
+async function loadInspector(){await Promise.all([loadQueue(),loadOps(),loadConflicts()]);}
+
+async function loadQueue(){
+  const data=await get('/api/devtools/queue');const items=data.items??[];
+  const el=document.getElementById('ins-queue');
+  document.getElementById('q-badge').textContent=items.length?`(${items.length})`:'';
+  if(!items.length){el.innerHTML='<div class="empty">Queue empty</div>';}
+  else{el.innerHTML=items.map(i=>`<div class="q-row ${i.status}">
+    <span class="q-status">${i.status}</span>
+    <span class="q-op">${esc(i.operation)}</span>
+    <span class="q-id">${esc(i.entityType)}/<strong>${esc(i.entityId.slice(0,12))}</strong></span>
+    ${i.lastError?`<span class="q-err" title="${esc(i.lastError)}">${esc(i.lastError.slice(0,40))}</span>`:''}
+    ${i.attempts>0?`<span style="font-size:9px;color:var(--tx3)">x${i.attempts}</span>`:''}
+  </div>`).join('');}
+  const retryEl=document.getElementById('ins-retry');
+  if(data.syncState==='retrying'&&data.nextRetryAt){
+    retryEl.textContent=`Retrying in ${Math.max(0,Math.ceil((data.nextRetryAt-Date.now())/1000))}s`;
+  }else{retryEl.textContent='';}
+}
+
+async function loadOps(){
+  const filter=document.getElementById('ops-filter').value;
+  const opsData=await get('/api/devtools/ops?limit=100');
+  const ops=Array.isArray(opsData)?opsData:[];
+  const filtered=filter?ops.filter(o=>o.type===filter):ops;
+  document.getElementById('ops-count').textContent=`(${filtered.length})`;
+  const el=document.getElementById('ins-ops');
+  if(!filtered.length){el.innerHTML='<div class="empty">No ops</div>';return;}
+  el.innerHTML=filtered.map(o=>`<div class="op-row">
+    <span class="op-type ${o.type}">${o.type}</span>
+    <span class="op-entity">${esc(o.entityType)}</span>
+    <span class="op-id">${esc(o.entityId.slice(0,16))}</span>
+    <span class="op-age">${relTime(o.hlc.wallTime)}</span>
+    <span class="op-synced ${o.synced?'yes':''}">${o.synced?'synced':'pending'}</span>
+  </div>`).join('');
+}
+
+async function loadConflicts(){
+  const filter=document.getElementById('cf-filter').value;
+  const data=await get(`/api/devtools/conflicts${filter?'?filter='+filter:''}`);
+  const conflicts=data.conflicts??[];
+  document.getElementById('cf-badge').textContent=data.unresolvedCount>0?`(${data.unresolvedCount} unresolved)`:conflicts.length?`(${conflicts.length})`:'';
+  const el=document.getElementById('ins-conflicts');
+  if(!conflicts.length){el.innerHTML='<div class="empty">No conflicts</div>';return;}
+  el.innerHTML=conflicts.map(c=>{
+    const lv=c.localVersion,rv=c.remoteVersion,mv=c.mergedVersion;
+    const lName=lv?.data?.name??JSON.stringify(lv?.data??{}).slice(0,30);
+    const rName=rv?.data?.name??JSON.stringify(rv?.data??{}).slice(0,30);
+    const wBadge={local:'bg',remote:'bb',merged:'bb',manual:'by'}[c.winner]??'';
+    const wLabel={local:'local (LWW)',remote:'remote (LWW)',merged:'CRDT merged',manual:'manual'}[c.winner]??c.winner;
+    return `<div class="cf ${c.resolved?(c.winner==='merged'?'merged':''):'unresolved'}">
+      <div class="cf-hdr">
+        <span class="badge ${c.resolved?'bg':'br'}">${c.resolved?'resolved':'conflict'}</span>
+        <span class="cf-rec">${esc(c.tableName)}/<strong>${esc(c.recordId)}</strong></span>
+        <span class="badge ${wBadge}">${wLabel}</span>
+        <span style="font-size:9px;color:var(--tx3)">${relTime(c.detectedAt)}</span>
+      </div>
+      <div class="cf-grid">
+        <div class="cf-side"><div class="cf-lbl">Local</div><div class="cf-val">${esc(String(lName).slice(0,40))}</div><div class="cf-dev">${esc((lv?.deviceId??'').slice(0,20))}</div></div>
+        <div class="cf-side"><div class="cf-lbl">Remote</div><div class="cf-val">${esc(String(rName).slice(0,40))}</div><div class="cf-dev">${esc((rv?.deviceId??'').slice(0,20))}</div></div>
+        ${mv?`<div class="cf-merged"><div class="cf-lbl">Merged</div><div class="cf-val">${esc(String(mv.data?.name??'').slice(0,60))}</div></div>`:''}
+      </div>
+      ${!c.resolved?`<div class="cf-foot">
+        <span class="cf-id">${esc(c.id.slice(0,8))}...</span>
+        <button onclick="cfAutoMerge('${esc(c.id)}')" class="btn-b" style="font-size:9px">CRDT</button>
+        <button onclick="cfManual('${esc(c.id)}','local')"  class="btn-g" style="font-size:9px">Local</button>
+        <button onclick="cfManual('${esc(c.id)}','remote')" style="font-size:9px">Remote</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function cfAutoMerge(id){await post(`/api/conflicts/${id}/auto-merge`,{});loadConflicts();}
+async function cfManual(id,side){
+  const data=await get('/api/conflicts?limit=200');
+  const c=(data.conflicts??[]).find(x=>x.id===id);if(!c)return;
+  await post(`/api/conflicts/${id}/manual-merge`,{data:side==='local'?(c.localVersion.data??{}):(c.remoteVersion.data??{})});
+  loadConflicts();
+}
+
+let logEs=null,allLogs=[],logInited=false;
+function initLogStream(){
+  if(logInited)return;logInited=true;
+  logEs=new EventSource('/api/devtools/log-stream');
+  logEs.onmessage=e=>{
+    const msg=JSON.parse(e.data);
+    if(msg.type==='snapshot')allLogs=msg.entries??[];
+    else if(msg.type==='entry'){allLogs.unshift(msg.entry);if(allLogs.length>500)allLogs.pop();}
+    applyLogFilter();
+    const errs=allLogs.filter(e=>e.level==='error'||e.level==='warn').length;
+    const badge=document.getElementById('log-badge');
+    badge.textContent=errs>0?`(${errs})`:'';
+  };
+  logEs.onerror=()=>{};
+}
+
+function applyLogFilter(){
+  const level=document.getElementById('log-level').value;
+  const cat=document.getElementById('log-cat').value;
+  const search=document.getElementById('log-search').value.toLowerCase();
+  let filtered=allLogs;
+  if(level)filtered=filtered.filter(e=>e.level===level);
+  if(cat)filtered=filtered.filter(e=>e.category===cat);
+  if(search)filtered=filtered.filter(e=>e.message.toLowerCase().includes(search)||JSON.stringify(e.meta??{}).toLowerCase().includes(search));
+  document.getElementById('log-count').textContent=`${filtered.length} entries`;
+  const el=document.getElementById('log-list');
+  if(!filtered.length){el.innerHTML='<div class="empty">No entries match filter</div>';return;}
+  const LC={debug:'lvl-debug',info:'lvl-info',warn:'lvl-warn',error:'lvl-error'};
+  el.innerHTML=filtered.slice(0,300).map(e=>{
+    const meta=e.meta?JSON.stringify(e.meta):'';
+    return `<div class="log-row">
+      <span class="log-ts">${fmtTime(e.at)}</span>
+      <span class="log-lvl ${LC[e.level]??''}">${e.level}</span>
+      <span class="log-cat">${esc(e.category)}</span>
+      <span class="log-msg">${esc(e.message)}</span>
+      ${meta?`<span class="log-meta">${esc(meta.slice(0,80))}</span>`:''}
+    </div>`;
+  }).join('');
+  if(document.getElementById('log-autoscroll').checked)el.scrollTop=el.scrollHeight;
+}
+
+async function clearLogs(){await fetch('/api/devtools/logs',{method:'DELETE'});allLogs=[];applyLogFilter();}
+async function forceSync(){await post('/api/sync',{});setTimeout(loadOverview,300);}
+
+async function get(url){try{return await(await fetch(url)).json();}catch{return {};}}
+async function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<5)return 'just now';if(d<60)return d+'s ago';if(d<3600)return Math.floor(d/60)+'m ago';return Math.floor(d/3600)+'h ago';}
+function fmtTime(ts){return new Date(ts).toISOString().slice(11,23);}
+
+loadOverview();
+setInterval(loadOverview,4000);
+setInterval(()=>{if(document.querySelector('.tab-pane.active')?.id==='pane-inspector')loadQueue();},2000);
+</script>
+</body>
+</html>

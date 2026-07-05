@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edge Sync — Dashboard</title>
+<style>
+:root {
+  --bg:    #ffffff;
+  --panel: #f8f8f8;
+  --border:#e0e0e0;
+  --text:  #000000;
+  --dim:   #555555;
+  /* kept for JS inline style.color references */
+  --green: #000000;
+  --red:   #000000;
+  --yellow:#777777;
+  --blue:  #000000;
+  --orange:#777777;
+  --purple:#555555;
+  --mono: ui-monospace,'JetBrains Mono','Fira Code',Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);
+  font-family:var(--mono);font-size:12px;line-height:1.5}
+
+header{display:flex;align-items:center;gap:10px;padding:0 16px;height:40px;
+  background:var(--bg);border-bottom:1px solid var(--border)}
+header h1{font-size:12px;font-weight:700;letter-spacing:.5px}
+.dot{width:7px;height:7px;border-radius:50%;border:1.5px solid #c8c8c8;
+  flex-shrink:0;transition:all .3s}
+.dot.on{background:var(--text);border-color:var(--text)}
+.dot.sync{background:var(--text);border-color:var(--text);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.node-id{margin-left:auto;color:var(--dim);font-size:10px}
+#syncing-label{font-size:10px;color:var(--dim);display:none}
+
+.layout{display:grid;grid-template-columns:265px 1fr;height:calc(100vh - 40px)}
+.sidebar{background:var(--panel);border-right:1px solid var(--border);
+  overflow-y:auto;display:flex;flex-direction:column}
+.main{overflow-y:auto;display:flex;flex-direction:column;background:var(--bg)}
+
+.card{padding:12px 14px;border-bottom:1px solid var(--border)}
+.card h2{font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.8px;color:var(--dim);margin-bottom:10px}
+
+.stat{display:flex;justify-content:space-between;align-items:center;
+  padding:3px 0;border-bottom:1px solid var(--border)}
+.stat:last-child{border:none}
+.stat .label{color:var(--dim);font-size:11px}
+.stat .value{font-weight:600;font-size:11px}
+.val-green{color:var(--green)}.val-red{color:var(--red)}
+.val-yellow{color:var(--yellow)}.val-blue{color:var(--blue)}
+
+button{background:var(--bg);border:1px solid #c8c8c8;color:var(--dim);
+  font-family:var(--mono);font-size:11px;padding:4px 10px;cursor:pointer;
+  border-radius:2px;transition:all .1s}
+button:hover{border-color:var(--dim);color:var(--text);background:var(--panel)}
+button.danger{border-color:var(--dim);color:var(--dim)}
+button.danger:hover{background:var(--panel)}
+button.primary{border-color:var(--text);color:var(--text)}
+button.primary:hover{background:var(--text);color:var(--bg)}
+button.active{background:var(--text);border-color:var(--text);color:var(--bg)}
+
+input,textarea,select{background:var(--bg);border:1px solid #c8c8c8;color:var(--text);
+  font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:2px;width:100%}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--text)}
+.row{display:flex;gap:5px;align-items:flex-start}
+.row input{flex:1}
+label{display:block;color:var(--dim);font-size:10px;margin-bottom:2px}
+.field{margin-bottom:7px}
+
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{text-align:left;color:var(--dim);font-weight:600;padding:6px 8px;
+  border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+td{padding:5px 8px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--dim)}
+td strong{color:var(--text)}
+tr:last-child td{border:none}
+tr:hover td{background:var(--panel)}
+
+.badge{display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;
+  font-weight:600;background:var(--panel);border:1px solid #c8c8c8;color:var(--dim)}
+.badge-green{background:var(--text);color:var(--bg);border-color:var(--text)}
+.badge-red{background:var(--bg);color:var(--text);border-color:var(--text)}
+.badge-yellow{background:var(--panel);color:var(--dim)}
+.badge-blue{background:var(--text);color:var(--bg);border-color:var(--text)}
+
+.mono-sm{font-size:10px;color:var(--dim);font-family:var(--mono);word-break:break-all}
+.empty{color:var(--dim);font-size:11px;padding:14px;text-align:center}
+
+#toast{position:fixed;bottom:14px;right:14px;background:var(--text);color:var(--bg);
+  padding:6px 12px;border-radius:2px;font-size:11px;
+  opacity:0;transition:opacity .25s;pointer-events:none;z-index:99}
+#toast.show{opacity:1}
+
+/* Change tracking */
+tr.unsynced td{background:rgba(0,0,0,.02)}
+tr.unsynced td:first-child{border-left:2px solid #c8c8c8;padding-left:6px}
+
+/* Sync state badge */
+.state-badge{display:inline-block;padding:1px 7px;border-radius:2px;
+  font-size:10px;font-weight:600;border:1px solid #c8c8c8;color:var(--dim)}
+.state-idle{}
+.state-syncing{border-color:var(--text);color:var(--text);animation:pulse .8s infinite}
+.state-retrying{border-color:var(--dim);color:var(--dim)}
+.state-offline{border-color:var(--dim);color:var(--dim)}
+.state-paused{color:var(--dim)}
+
+.err-row{padding:5px 0;border-bottom:1px solid var(--border)}
+.err-row:last-child{border:none}
+.err-msg{font-size:10px;font-weight:600;margin-bottom:2px}
+.err-meta{font-size:9px;color:var(--dim);display:flex;gap:10px}
+
+.tl-row{display:flex;align-items:center;gap:8px;padding:3px 0;
+  border-bottom:1px solid var(--border);font-size:10px}
+.tl-row:last-child{border:none}
+.tl-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.tl-ok{background:var(--text)}.tl-err{border:1.5px solid var(--dim);background:transparent}
+.tl-meta{color:var(--dim);flex:1}
+
+.conflict-card{background:var(--bg);border:1px solid var(--border);
+  border-radius:2px;margin-bottom:6px;overflow:hidden}
+.conflict-card.unresolved{border-left:3px solid var(--text)}
+.conflict-header{display:flex;align-items:center;gap:8px;padding:7px 12px;
+  background:var(--panel);border-bottom:1px solid var(--border)}
+.conflict-record{font-weight:600;font-size:11px}
+.conflict-meta{font-size:9px;color:var(--dim);margin-left:auto}
+.conflict-body{display:grid;grid-template-columns:1fr 1fr}
+.cv-side{padding:9px 12px}
+.cv-side:first-child{border-right:1px solid var(--border)}
+.cv-label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--dim);margin-bottom:5px;font-weight:600}
+.cv-device{font-size:10px;margin-bottom:2px;color:var(--dim)}
+.cv-time{font-size:9px;color:var(--dim);margin-bottom:6px}
+.cv-data{font-size:10px;background:var(--panel);padding:5px 8px;
+  border-radius:2px;white-space:pre-wrap;word-break:break-all;
+  max-height:80px;overflow-y:auto;border:1px solid var(--border);color:var(--dim)}
+.winner-local{color:var(--text);font-weight:700}
+.winner-remote{color:var(--text);font-weight:700}
+.conflict-footer{padding:6px 12px;display:flex;align-items:center;
+  gap:6px;border-top:1px solid var(--border)}
+.conflict-count{display:inline-block;padding:1px 6px;border-radius:2px;
+  font-size:9px;font-weight:600;border:1px solid var(--text);
+  color:var(--text);margin-left:5px}
+
+.filter-tabs{display:flex;gap:3px;margin-bottom:10px}
+.filter-tab{padding:2px 9px;font-size:10px;border-radius:2px;cursor:pointer;
+  border:1px solid #c8c8c8;background:transparent;color:var(--dim);font-family:var(--mono)}
+.filter-tab:hover{color:var(--text)}
+.filter-tab.active{border-color:var(--text);color:var(--text);background:var(--panel)}
+.filter-tab.active-yellow{border-color:var(--dim);color:var(--dim)}
+.unsynced-count{display:inline-block;padding:1px 5px;border-radius:2px;
+  font-size:9px;font-weight:600;border:1px solid #c8c8c8;color:var(--dim);margin-left:4px}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#c8c8c8;border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="conn-dot"></div>
+  <h1>EDGE SYNC ENGINE</h1>
+  <span id="syncing-label">syncing...</span>
+  <span class="node-id" id="node-id-label">node: —</span>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+
+    <div class="card">
+      <h2>Sync Manager</h2>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span id="state-badge" class="state-badge state-idle">idle</span>
+        <span id="s-connected" style="font-size:10px;color:var(--dim)">—</span>
+      </div>
+      <div class="stat"><span class="label">Pending ops</span>   <span class="value" id="s-pending">—</span></div>
+      <div class="stat"><span class="label">Last sync</span>     <span class="value" id="s-last-sync">—</span></div>
+      <div class="stat"><span class="label">Next retry</span>    <span class="value" id="s-next-retry" style="color:var(--yellow)">—</span></div>
+      <div class="stat"><span class="label">Cycle retries</span> <span class="value" id="s-retries">—</span></div>
+      <div class="stat"><span class="label">Circuit</span>       <span class="value" id="s-circuit">—</span></div>
+      <div style="display:flex;gap:5px;margin-top:10px">
+        <button class="primary" onclick="forceSync()" style="flex:1">Sync Now</button>
+        <button id="btn-pause" onclick="togglePause()" style="flex:1">Pause</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Simulate Failures</h2>
+      <div style="margin-bottom:8px">
+        <button id="btn-offline" class="danger" onclick="toggleOffline()" style="width:100%">Go Offline</button>
+      </div>
+      <div class="field">
+        <label>Latency (ms)</label>
+        <div class="row">
+          <input type="number" id="latency-input" value="0" min="0" max="10000" step="100">
+          <button onclick="setLatency()">Set</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Timeout (ms)</label>
+        <div class="row">
+          <input type="number" id="timeout-input" value="0" min="0" max="30000" step="500">
+          <button onclick="setTimeout_()">Set</button>
+        </div>
+      </div>
+      <div class="stat"><span class="label">Offline</span>  <span class="value" id="s-offline">—</span></div>
+      <div class="stat"><span class="label">Latency</span>  <span class="value" id="s-latency">—</span></div>
+      <div class="stat"><span class="label">Timeout</span>  <span class="value" id="s-timeout">—</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Create User</h2>
+      <div class="field"><label>ID</label><input id="u-id" placeholder="user-004"></div>
+      <div class="field"><label>Name</label><input id="u-name" placeholder="Diana"></div>
+      <div class="field"><label>Device ID</label><input id="u-device" placeholder="device-xyz"></div>
+      <button class="primary" onclick="createUser()" style="width:100%">Create</button>
+    </div>
+
+    <div class="card">
+      <h2>Update User</h2>
+      <div class="field"><label>ID</label><input id="uu-id" placeholder="user-001"></div>
+      <div class="field"><label>New Name</label><input id="uu-name" placeholder="Alice (updated)"></div>
+      <button onclick="updateUser()" style="width:100%">Update</button>
+    </div>
+
+    <div class="card">
+      <h2>Delete User</h2>
+      <div class="field"><label>ID</label><input id="del-id" placeholder="user-002"></div>
+      <button class="danger" onclick="deleteUser()" style="width:100%">Delete</button>
+    </div>
+
+    <div class="card" style="border-top:2px solid var(--border)">
+      <h2>Crash During Write</h2>
+      <p style="color:var(--dim);font-size:10px;margin-bottom:10px;line-height:1.6">
+        Writes to oplog and changes WITHOUT committing the entity store.
+        Demonstrates the divergence atomicity prevents.
+      </p>
+      <div class="field"><label>Entity ID</label><input id="crash-id" placeholder="user-crash-test"></div>
+      <div class="field"><label>Name</label><input id="crash-name" placeholder="Crash Victim"></div>
+      <div style="display:flex;gap:5px">
+        <button class="danger" onclick="simulateCrash()" style="flex:1">Crash Write</button>
+        <button onclick="recoverFromLog()" style="flex:1">Recover</button>
+      </div>
+      <div id="crash-log" style="margin-top:8px;font-size:10px;color:var(--dim);min-height:36px;white-space:pre-wrap;line-height:1.6"></div>
+    </div>
+
+    <div class="card">
+      <h2>Duplicate Operation</h2>
+      <p style="color:var(--dim);font-size:10px;margin-bottom:10px;line-height:1.6">
+        Re-submits the most recent op with the same UUID.
+        INSERT OR IGNORE discards the duplicate.
+      </p>
+      <button class="primary" onclick="simulateDuplicate()" style="width:100%">Send Duplicate Op</button>
+      <div id="dup-log" style="margin-top:8px;font-size:10px;color:var(--dim);min-height:36px;white-space:pre-wrap;line-height:1.6"></div>
+    </div>
+
+    <div class="card">
+      <h2>Trigger Conflict</h2>
+      <p style="color:var(--dim);font-size:10px;margin-bottom:10px;line-height:1.6">
+        Injects a write from a simulated second device onto an existing record.
+      </p>
+      <div class="field"><label>Entity ID (must exist)</label><input id="conflict-id" placeholder="user-001"></div>
+      <button onclick="triggerConflict()" style="width:100%">Inject Conflict</button>
+      <div id="conflict-sim-log" style="margin-top:8px;font-size:10px;color:var(--dim);min-height:36px;white-space:pre-wrap;line-height:1.6"></div>
+    </div>
+
+  </div>
+
+  <div class="main">
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 style="margin:0">Users</h2>
+        <button onclick="loadUsers()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Device</th><th>Updated At</th><th></th></tr></thead>
+        <tbody id="users-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h2 style="margin:0">Change Log <span class="unsynced-count" id="unsynced-count">0</span></h2>
+        <button onclick="loadChanges()">Refresh</button>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" id="tab-all"      onclick="setFilter('all')">All</button>
+        <button class="filter-tab"        id="tab-unsynced" onclick="setFilter('unsynced')">Unsynced</button>
+        <button class="filter-tab"        id="tab-synced"   onclick="setFilter('synced')">Synced</button>
+      </div>
+      <table>
+        <thead><tr><th>Change ID</th><th>Table</th><th>Record</th><th>Operation</th><th>Timestamp</th><th>Device</th><th>Synced</th></tr></thead>
+        <tbody id="changes-tbody"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 style="margin:0">Conflicts <span class="conflict-count" id="conflict-count"></span></h2>
+        <div style="display:flex;gap:5px;align-items:center">
+          <select id="conflict-filter" onchange="loadConflicts()"
+            style="font-size:10px;background:var(--bg);border:1px solid #c8c8c8;
+            color:var(--text);padding:2px 6px;border-radius:2px;font-family:var(--mono)">
+            <option value="">All</option>
+            <option value="unresolved">Unresolved</option>
+            <option value="resolved">Resolved</option>
+          </select>
+          <button onclick="loadConflicts()">Refresh</button>
+        </div>
+      </div>
+      <div id="conflicts-list"><div class="empty">No conflicts detected</div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 style="margin:0">Sync Timeline <span style="font-size:9px;color:var(--dim);font-weight:400">(last 10 cycles)</span></h2>
+        <button onclick="loadSyncLog()">Refresh</button>
+      </div>
+      <div id="sync-timeline"><div class="empty" style="padding:8px">No cycles yet</div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 style="margin:0">Error Log <span id="error-count" style="font-size:9px;margin-left:5px;
+          padding:1px 5px;border-radius:2px;border:1px solid var(--text);color:var(--text)"></span></h2>
+        <button onclick="loadErrors()">Refresh</button>
+      </div>
+      <div id="error-log"><div class="empty" style="padding:8px">No errors</div></div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 style="margin:0">Operation Log <span style="font-size:9px;color:var(--dim);font-weight:400">(last 20)</span></h2>
+        <button onclick="loadOps()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Op ID</th><th>Type</th><th>Entity</th><th>HLC</th><th>Node</th><th>Synced</th></tr></thead>
+        <tbody id="ops-tbody"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let offlineState=false, pauseState=false;
+
+const es=new EventSource('/api/events');
+es.onmessage=e=>{renderStatus(JSON.parse(e.data));};
+es.onerror=()=>{document.getElementById('conn-dot').className='dot';};
+
+function renderStatus(s){
+  document.getElementById('node-id-label').textContent='node: '+s.nodeId;
+  const dot=document.getElementById('conn-dot');
+  dot.className=s.syncing?'dot sync':s.connected?'dot on':'dot';
+  document.getElementById('syncing-label').style.display=s.syncing?'':'none';
+
+  const st=s.syncState??'idle';
+  const badge=document.getElementById('state-badge');
+  badge.textContent=st;badge.className=`state-badge state-${st}`;
+
+  const connEl=document.getElementById('s-connected');
+  connEl.textContent=s.connected?'connected':'offline';
+  connEl.style.color=s.connected?'var(--green)':'var(--red)';
+
+  setVal('s-pending',   s.pendingOps,                    s.pendingOps>0?'val-yellow':'val-green');
+  setVal('s-last-sync', s.lastSyncAt?relTime(s.lastSyncAt):'never','');
+  setVal('s-retries',   s.retryCount,                    s.retryCount>0?'val-red':'');
+
+  if(s.nextRetryAt){
+    const secs=Math.max(0,Math.ceil((s.nextRetryAt-Date.now())/1000));
+    setVal('s-next-retry',`in ${secs}s`,'val-yellow');
+  }else{setVal('s-next-retry','—','');}
+
+  const cs=s.circuit?.state??'unknown';
+  setVal('s-circuit',cs,cs==='closed'?'val-green':cs==='open'?'val-red':'val-yellow');
+
+  offlineState=s.simulation?.offline??false;
+  const btnOff=document.getElementById('btn-offline');
+  btnOff.textContent=offlineState?'Go Online':'Go Offline';
+  btnOff.className=offlineState?'active danger':'danger';
+
+  pauseState=st==='paused';
+  const btnPause=document.getElementById('btn-pause');
+  btnPause.textContent=pauseState?'Resume':'Pause';
+  btnPause.style.borderColor=pauseState?'var(--text)':'';
+  btnPause.style.color=pauseState?'var(--text)':'';
+
+  setVal('s-offline',offlineState?'yes':'no',            offlineState?'val-red':'val-green');
+  setVal('s-latency',(s.simulation?.latencyMs??0)+' ms', s.simulation?.latencyMs>0?'val-yellow':'');
+  setVal('s-timeout',s.simulation?.timeoutMs>0?s.simulation.timeoutMs+' ms':'off',
+                                                         s.simulation?.timeoutMs>0?'val-red':'');
+}
+
+function setVal(id,val,cls){
+  const el=document.getElementById(id);if(!el)return;
+  el.textContent=val;el.className='value '+(cls??'');
+}
+
+function relTime(ts){
+  const d=Math.floor((Date.now()-ts)/1000);
+  if(d<5)return 'just now';if(d<60)return d+'s ago';
+  if(d<3600)return Math.floor(d/60)+'m ago';return Math.floor(d/3600)+'h ago';
+}
+
+async function loadSyncLog(){
+  const log=await(await fetch('/api/sync/log?limit=10')).json();
+  const el=document.getElementById('sync-timeline');
+  if(!log.length){el.innerHTML='<div class="empty" style="padding:8px">No cycles yet</div>';return;}
+  el.innerHTML=log.map(a=>{
+    const dur=a.durationMs!=null?a.durationMs+'ms':'—';
+    const info=a.success
+      ?`sent ${a.sent} · recv ${a.received} · ${dur}`
+      :`<span style="font-weight:600">${esc(a.error??'error')}</span> · ${dur}`;
+    return `<div class="tl-row">
+      <div class="tl-dot ${a.success?'tl-ok':'tl-err'}"></div>
+      <div style="font-size:9px;color:var(--dim);white-space:nowrap">${relTime(a.startedAt)}</div>
+      <div class="tl-meta">${info}</div>
+    </div>`;
+  }).join('');
+}
+
+async function loadErrors(){
+  const errors=await(await fetch('/api/sync/errors?limit=15')).json();
+  const el=document.getElementById('error-log');
+  const cnt=document.getElementById('error-count');
+  cnt.textContent=errors.length>0?errors.length:'';
+  if(!errors.length){el.innerHTML='<div class="empty" style="padding:8px">No errors</div>';return;}
+  el.innerHTML=errors.map(e=>`<div class="err-row">
+    <div class="err-msg">${esc(e.message)}</div>
+    <div class="err-meta"><span>${new Date(e.at).toLocaleTimeString()}</span><span>attempt #${e.attempt}</span><span>${e.pendingOps} pending</span></div>
+  </div>`).join('');
+}
+
+async function loadUsers(){
+  const users=await(await fetch('/api/users')).json();
+  const tbody=document.getElementById('users-tbody');
+  if(!users.length){tbody.innerHTML='<tr><td colspan="5" class="empty">No users</td></tr>';return;}
+  tbody.innerHTML=users.map(u=>`<tr>
+    <td class="mono-sm">${esc(u.id)}</td>
+    <td><strong>${esc(u.name)}</strong></td>
+    <td class="mono-sm">${esc(u.device_id||'—')}</td>
+    <td class="mono-sm">${new Date(u.updated_at).toLocaleString()}</td>
+    <td><button class="danger" style="padding:2px 6px;font-size:10px" onclick="quickDelete('${esc(u.id)}')">Del</button></td>
+  </tr>`).join('');
+}
+
+async function loadOps(){
+  const ops=await(await fetch('/api/ops?limit=20')).json();
+  const tbody=document.getElementById('ops-tbody');
+  if(!ops.length){tbody.innerHTML='<tr><td colspan="6" class="empty">No operations</td></tr>';return;}
+  tbody.innerHTML=ops.map(op=>`<tr>
+    <td class="mono-sm">${op.id.slice(0,8)}...</td>
+    <td><span class="badge ${op.type==='delete'?'badge-red':op.type==='insert'?'badge-green':'badge-yellow'}">${op.type}</span></td>
+    <td class="mono-sm">${esc(op.entityType)}/<strong>${esc(op.entityId)}</strong></td>
+    <td class="mono-sm">${op.hlc.wallTime}:${op.hlc.logical}</td>
+    <td class="mono-sm">${op.nodeId.slice(0,12)}</td>
+    <td><span class="badge ${op.synced?'badge-green':'badge-yellow'}">${op.synced?'synced':'pending'}</span></td>
+  </tr>`).join('');
+}
+
+async function createUser(){
+  const id=val('u-id'),name=val('u-name'),device_id=val('u-device');
+  if(!id||!name)return toast('ID and Name required');
+  await post('/api/users',{id,name,device_id});
+  clearFields(['u-id','u-name','u-device']);
+  loadUsers();loadOps();loadChanges();toast('User created');
+}
+async function updateUser(){
+  const id=val('uu-id'),name=val('uu-name');
+  if(!id)return toast('ID required');
+  await patch('/api/users/'+id,{name,updated_at:Date.now()});
+  clearFields(['uu-id','uu-name']);loadUsers();loadOps();loadChanges();toast('User updated');
+}
+async function deleteUser(){
+  const id=val('del-id');if(!id)return toast('ID required');
+  await del('/api/users/'+id);clearFields(['del-id']);
+  loadUsers();loadOps();loadChanges();toast('User deleted');
+}
+async function quickDelete(id){await del('/api/users/'+id);loadUsers();loadOps();loadChanges();toast('Deleted '+id);}
+
+let currentFilter='all';
+async function loadChanges(){
+  const changes=await(await fetch(`/api/changes?filter=${currentFilter}&limit=50`)).json();
+  const tbody=document.getElementById('changes-tbody');
+  const unsyncedList=await(await fetch('/api/changes?filter=unsynced&limit=200')).json();
+  document.getElementById('unsynced-count').textContent=String(unsyncedList.length);
+  if(!changes.length){tbody.innerHTML=`<tr><td colspan="7" class="empty">No changes (${currentFilter})</td></tr>`;return;}
+  tbody.innerHTML=changes.map(c=>`<tr class="${c.synced===0?'unsynced':''}">
+    <td class="mono-sm">${esc(c.id).slice(0,8)}...</td>
+    <td class="mono-sm">${esc(c.tableName)}</td>
+    <td><strong>${esc(c.recordId)}</strong></td>
+    <td><span class="badge ${c.operation==='delete'?'badge-red':c.operation==='insert'?'badge-green':'badge-yellow'}">${c.operation}</span></td>
+    <td class="mono-sm">${new Date(c.timestamp).toLocaleString()}</td>
+    <td class="mono-sm">${esc(c.deviceId).slice(0,12)}</td>
+    <td>${c.synced===1?'<span class="badge badge-green">synced</span>':'<span class="badge badge-yellow">pending</span>'}</td>
+  </tr>`).join('');
+}
+function setFilter(f){
+  currentFilter=f;
+  ['all','unsynced','synced'].forEach(t=>{
+    const el=document.getElementById('tab-'+t);
+    el.className='filter-tab'+(t===f?(t==='unsynced'?' active-yellow':' active'):'');
+  });
+  loadChanges();
+}
+
+async function simulateCrash(){
+  const id=val('crash-id')||'user-crash-test';
+  const name=val('crash-name')||'Crash Victim';
+  const res=await post('/api/simulate/crash-write',{entityType:'users',entityId:id,payload:{name,updated_at:Date.now(),device_id:'crash-sim'}});
+  const data=await res.json();
+  const log=document.getElementById('crash-log');
+  log.textContent=`CRASHED\nop: ${data.opId?.slice(0,8)}...\n${data.divergence}\nentity in store: ${JSON.stringify(data.entityNow)} <- null = MISSING`;
+  log.style.color='var(--red)';
+  loadUsers();loadChanges();loadOps();
+}
+async function recoverFromLog(){
+  const res=await post('/api/simulate/recover',{});const data=await res.json();
+  const log=document.getElementById('crash-log');
+  log.textContent=`RECOVERED\n${data.message}`;log.style.color='var(--green)';
+  loadUsers();loadChanges();loadOps();loadSyncLog();toast(`Recovered — ${data.replayed} op(s) replayed`);
+}
+async function simulateDuplicate(){
+  const res=await post('/api/simulate/duplicate-op',{});const data=await res.json();
+  const log=document.getElementById('dup-log');
+  if(!data.originalOpId){log.textContent=data.message;log.style.color='var(--dim)';return;}
+  log.textContent=`op id: ${data.originalOpId.slice(0,8)}...\nduplicate: ${data.duplicate?'ignored (idempotent)':'APPLIED AGAIN'}\n${data.message}`;
+  log.style.color=data.duplicate?'var(--green)':'var(--red)';
+  loadChanges();loadOps();toast(data.duplicate?'Duplicate ignored':'WARNING: not idempotent!');
+}
+
+async function loadConflicts(){
+  const filter=document.getElementById('conflict-filter').value;
+  const url='/api/conflicts?limit=20'+(filter?`&filter=${filter}`:'');
+  const{conflicts,unresolvedCount}=await(await fetch(url)).json();
+  const cnt=document.getElementById('conflict-count');
+  cnt.textContent=unresolvedCount>0?String(unresolvedCount):'';
+  const el=document.getElementById('conflicts-list');
+  if(!conflicts.length){el.innerHTML=`<div class="empty">No conflicts${filter?' ('+filter+')':''}</div>`;return;}
+  el.innerHTML=conflicts.map(c=>renderConflict(c)).join('');
+}
+
+function winnerLabel(winner){
+  if(winner==='merged')return{cls:'badge-blue',text:'CRDT merged'};
+  if(winner==='manual')return{cls:'badge-yellow',text:'manual'};
+  if(winner==='remote')return{cls:'badge-blue',text:'remote (LWW)'};
+  if(winner==='local') return{cls:'badge-green',text:'local (LWW)'};
+  return{cls:'',text:winner};
+}
+
+function renderConflict(c){
+  const lv=c.localVersion,rv=c.remoteVersion,mv=c.mergedVersion;
+  const wl=winnerLabel(c.winner);const hasMerge=mv!=null;const isCrdt=c.winner==='merged';
+  const lData=JSON.stringify(lv.data??{},null,2);
+  const rData=JSON.stringify(rv.data??{},null,2);
+  const mData=mv?JSON.stringify(mv.data??{},null,2):'';
+  const ts=(hlc)=>new Date(hlc.wallTime).toLocaleTimeString();
+  const cols=hasMerge?`<div class="conflict-body" style="grid-template-columns:1fr 1fr 1fr">`:`<div class="conflict-body">`;
+  return `<div class="conflict-card ${c.resolved?'':'unresolved'}" id="cf-${esc(c.id).slice(0,8)}">
+    <div class="conflict-header">
+      <span class="badge ${c.resolved?'badge-green':'badge-red'}">${c.resolved?'resolved':'conflict'}</span>
+      <span class="conflict-record">${esc(c.tableName)} / <strong>${esc(c.recordId)}</strong></span>
+      <span class="badge ${wl.cls}" style="margin-left:4px">${wl.text}</span>
+      <span class="conflict-meta">${relTime(c.detectedAt)}</span>
+    </div>
+    ${cols}
+      <div class="cv-side">
+        <div class="cv-label ${c.winner==='local'?'winner-local':''}">${c.winner==='local'?'[kept] ':''}LOCAL</div>
+        <div class="cv-device">device: <strong>${esc(lv.deviceId)}</strong></div>
+        <div class="cv-time">${ts(lv.hlc)} &middot; ${lv.hlc.wallTime}:${lv.hlc.logical}</div>
+        <div class="cv-data">${esc(lData)}</div>
+      </div>
+      <div class="cv-side">
+        <div class="cv-label ${c.winner==='remote'?'winner-remote':''}">${c.winner==='remote'?'[kept] ':''}REMOTE</div>
+        <div class="cv-device">device: <strong>${esc(rv.deviceId)}</strong></div>
+        <div class="cv-time">${ts(rv.hlc)} &middot; ${rv.hlc.wallTime}:${rv.hlc.logical}</div>
+        <div class="cv-data">${esc(rData)}</div>
+      </div>
+      ${hasMerge?`<div class="cv-side" style="background:var(--panel)">
+        <div class="cv-label winner-remote">MERGED (${isCrdt?'CRDT auto':'manual'})</div>
+        <div class="cv-device">strategy: <strong>${isCrdt?'field-level CRDT':'user-defined'}</strong></div>
+        <div class="cv-time">${mv.hlc.wallTime}:${mv.hlc.logical}</div>
+        <div class="cv-data">${esc(mData)}</div>
+      </div>`:''}
+    </div>
+    ${!c.resolved?`<div class="conflict-footer">
+      <span style="font-size:9px;color:var(--dim)">id: ${esc(c.id).slice(0,12)}...</span>
+      <div style="margin-left:auto;display:flex;gap:4px">
+        <button onclick="previewAndAutoMerge('${esc(c.id)}')" class="primary" style="font-size:10px">CRDT merge</button>
+        <button onclick="applyVersion('${esc(c.id)}','local')"  style="font-size:10px">Keep local</button>
+        <button onclick="applyVersion('${esc(c.id)}','remote')" style="font-size:10px">Keep remote</button>
+        <button onclick="openManual('${esc(c.id)}')"            style="font-size:10px">Manual</button>
+      </div>
+    </div>
+    <div id="manual-${esc(c.id).slice(0,8)}" style="display:none;padding:10px 12px;border-top:1px solid var(--border)">
+      <div style="font-size:9px;color:var(--dim);margin-bottom:6px">Edit merged JSON:</div>
+      <textarea id="mdata-${esc(c.id).slice(0,8)}" rows="4"
+        style="font-size:10px;resize:vertical">${esc(JSON.stringify({...(lv.data??{}),...(rv.data??{})},null,2))}</textarea>
+      <div style="margin-top:6px;display:flex;gap:5px">
+        <button onclick="submitManual('${esc(c.id)}')" class="primary" style="font-size:10px">Apply Manual</button>
+        <button onclick="document.getElementById('manual-${esc(c.id).slice(0,8)}').style.display='none'" style="font-size:10px">Cancel</button>
+      </div>
+    </div>`:''}
+  </div>`;
+}
+
+async function resolveConflict(id){await post(`/api/conflicts/${id}/resolve`,{});loadConflicts();toast('Conflict acknowledged');}
+async function previewAndAutoMerge(id){
+  const preview=await(await fetch(`/api/conflicts/${id}/preview`)).json();
+  if(preview.error){toast('No CRDT schema — use Local/Remote/Manual');return;}
+  const result=await post(`/api/conflicts/${id}/auto-merge`,{});const data=await result.json();
+  if(!data.ok){toast('Auto-merge failed');return;}
+  loadConflicts();loadUsers();toast('CRDT merge applied');
+}
+async function applyVersion(id,side){
+  const{conflicts}=await(await fetch('/api/conflicts?limit=200')).json();
+  const c=conflicts.find(x=>x.id===id);if(!c)return;
+  await post(`/api/conflicts/${id}/manual-merge`,{data:side==='local'?(c.localVersion.data??{}):(c.remoteVersion.data??{})});
+  loadConflicts();loadUsers();toast(`Applied ${side} version`);
+}
+function openManual(id){const el=document.getElementById(`manual-${id.slice(0,8)}`);if(el)el.style.display=el.style.display==='none'?'':'none';}
+async function submitManual(id){
+  const ta=document.getElementById(`mdata-${id.slice(0,8)}`);let data;
+  try{data=JSON.parse(ta.value);}catch{toast('Invalid JSON');return;}
+  await post(`/api/conflicts/${id}/manual-merge`,{data});
+  loadConflicts();loadUsers();toast('Manual resolution applied');
+}
+
+async function triggerConflict(){
+  const id=val('conflict-id')||'user-001';
+  const res=await post('/api/simulate/conflict',{entityType:'users',entityId:id});
+  const data=await res.json();
+  const log=document.getElementById('conflict-sim-log');
+  if(!data.triggered){log.textContent=`No entity found for: ${id}\nWrite a user first.`;log.style.color='var(--dim)';return;}
+  log.textContent=`CONFLICT DETECTED\nwinner: ${data.winner} (LWW)\nlocal : ${JSON.stringify(data.localData??{}).slice(0,60)}\nremote: ${JSON.stringify(data.remoteData??{}).slice(0,60)}`;
+  log.style.color='var(--orange)';
+  loadConflicts();loadUsers();toast('Conflict triggered');
+}
+
+async function forceSync(){toast('Triggering sync...');await post('/api/sync',{});loadUsers();loadOps();loadChanges();loadSyncLog();loadErrors();}
+async function togglePause(){const endpoint=pauseState?'/api/sync/resume':'/api/sync/pause';await post(endpoint,{});toast(pauseState?'Sync resumed':'Sync paused');}
+async function toggleOffline(){await post('/api/simulate/offline',{offline:!offlineState});toast(!offlineState?'Simulating offline':'Back online');}
+async function setLatency(){const ms=parseInt(document.getElementById('latency-input').value,10)||0;await post('/api/simulate/latency',{ms});toast(ms>0?`Latency: ${ms}ms`:'Latency removed');}
+async function setTimeout_(){const ms=parseInt(document.getElementById('timeout-input').value,10)||0;await post('/api/simulate/timeout',{ms});toast(ms>0?`Timeout: ${ms}ms`:'Timeout disabled');}
+
+const val=id=>document.getElementById(id).value.trim();
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const clearFields=ids=>ids.forEach(id=>(document.getElementById(id).value=''));
+async function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+async function patch(url,body){return fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+async function del(url){return fetch(url,{method:'DELETE'});}
+
+let toastTimer;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2500);}
+
+function refreshAll(){loadUsers();loadOps();loadChanges();loadSyncLog();loadErrors();loadConflicts();}
+refreshAll();setInterval(refreshAll,5000);
+</script>
+</body>
+</html>
